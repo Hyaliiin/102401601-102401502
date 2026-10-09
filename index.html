@@ -24,11 +24,12 @@
       <section class="items-section" aria-labelledby="items-title">
         <div class="section-heading"><h2 id="items-title">校园信息</h2><span id="result-count" class="result-count"></span></div>
         <div class="filter-tabs" role="tablist" aria-label="信息筛选">
-          <button class="filter-tab active" type="button" role="tab" aria-selected="true" data-filter="lost">寻物信息</button>
-          <button class="filter-tab" type="button" role="tab" aria-selected="false" data-filter="found">招领信息</button>
-          <button class="filter-tab" type="button" role="tab" aria-selected="false" data-filter="latest">按最新发布</button>
+          <button id="filter-lost" class="filter-tab active" type="button" role="tab" aria-selected="true" aria-controls="item-list" data-filter="lost">寻物信息</button>
+          <button id="filter-found" class="filter-tab" type="button" role="tab" aria-selected="false" aria-controls="item-list" data-filter="found">招领信息</button>
+          <button id="filter-latest" class="filter-tab" type="button" role="tab" aria-selected="false" aria-controls="item-list" data-filter="latest">按最新发布</button>
         </div>
-        <div id="item-list" class="item-list" aria-live="polite"></div>
+        <div id="item-list" class="item-list" role="tabpanel" tabindex="0" aria-live="polite" aria-label="信息列表"></div>
+        <p id="interaction-feedback" class="sr-only" aria-live="assertive"></p>
       </section>
     </main>
 
