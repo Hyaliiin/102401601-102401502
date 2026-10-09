@@ -9,15 +9,34 @@
     return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
   }
 
+  function isStoredItem(item) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const fields = ["id", "type", "name", "category", "location", "eventAt", "description", "contact", "status", "publishedAt", "ownerId"];
+    if (!fields.every((key) => typeof item[key] === "string" && item[key].trim())) return false;
+    const statuses = item.type === "lost" ? ["searching", "recovered"] : item.type === "found" ? ["pending", "returned"] : [];
+    return statuses.includes(item.status) && Number.isFinite(Date.parse(item.eventAt)) && Number.isFinite(Date.parse(item.publishedAt));
+  }
+
   function loadItems() {
+    let raw;
     try {
-      const raw = global.localStorage.getItem(ITEMS_KEY);
-      if (raw === null) return { ok: true, items: [] };
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return { ok: false, items: [] };
-      return { ok: true, items: parsed.filter((item) => item && typeof item === "object" && typeof item.id === "string") };
+      raw = global.localStorage.getItem(ITEMS_KEY);
     } catch (_) {
-      return { ok: false, items: [] };
+      return { ok: false, items: [], reason: "unavailable" };
+    }
+    if (raw === null) return { ok: true, items: [] };
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return { ok: false, items: [], reason: "corrupt" };
+      const ids = new Set();
+      const items = parsed.filter((item) => {
+        if (!isStoredItem(item) || ids.has(item.id)) return false;
+        ids.add(item.id);
+        return true;
+      });
+      return items.length === parsed.length ? { ok: true, items } : { ok: false, items, reason: "corrupt" };
+    } catch (_) {
+      return { ok: false, items: [], reason: "corrupt" };
     }
   }
 
@@ -30,16 +49,17 @@
   }
 
   function saveItem(item) {
+    const loaded = loadItems();
+    if (!loaded.ok) return { ok: false, reason: loaded.reason };
+    if (!isStoredItem(item)) return { ok: false, reason: "invalid" };
+    const current = loaded.items;
+    if (current.some((stored) => stored.id === item.id)) return { ok: false, reason: "duplicate" };
     try {
-      const raw = global.localStorage.getItem(ITEMS_KEY);
-      const current = raw === null ? [] : JSON.parse(raw);
-      if (!Array.isArray(current)) return { ok: false, reason: "unavailable" };
-      if (current.some((stored) => stored && stored.id === item.id)) return { ok: false, reason: "duplicate" };
       current.push(item);
       global.localStorage.setItem(ITEMS_KEY, JSON.stringify(current));
       return { ok: true };
-    } catch (_) {
-      return { ok: false, reason: "unavailable" };
+    } catch (error) {
+      return { ok: false, reason: error.name === "QuotaExceededError" ? "quota" : "unavailable" };
     }
   }
 

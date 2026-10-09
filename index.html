@@ -23,7 +23,7 @@
         <p>把线索留下，让物品回家。</p>
       </section>
       <section class="items-section" aria-labelledby="items-title">
-        <div class="section-heading"><h2 id="items-title">校园信息</h2><span id="result-count" class="result-count"></span></div>
+        <div class="section-heading"><h2 id="items-title" tabindex="-1">校园信息</h2><span id="result-count" class="result-count"></span></div>
         <div class="filter-tabs" role="tablist" aria-label="信息筛选">
           <button id="filter-lost" class="filter-tab active" type="button" role="tab" aria-selected="true" aria-controls="item-list" data-filter="lost">寻物信息</button>
           <button id="filter-found" class="filter-tab" type="button" role="tab" aria-selected="false" aria-controls="item-list" data-filter="found">招领信息</button>
@@ -35,43 +35,52 @@
       </section>
 
       <section id="publish-view" class="publish-view" aria-labelledby="publish-title" hidden>
-        <div class="section-heading publish-heading"><div><p class="eyebrow">校园互助</p><h2 id="publish-title">发布信息</h2></div></div>
+        <div class="section-heading publish-heading"><div><p class="eyebrow">校园互助</p><h2 id="publish-title" tabindex="-1">发布信息</h2></div></div>
         <div class="mode-switch" role="group" aria-label="选择发布类型">
           <button class="mode-button active" id="mode-lost" type="button" aria-pressed="true" data-mode="lost">发布寻物</button>
           <button class="mode-button" id="mode-found" type="button" aria-pressed="false" data-mode="found">发布招领</button>
         </div>
-        <form id="publish-form" class="publish-form" novalidate>
+        <form id="publish-form" class="publish-form" aria-labelledby="publish-title" aria-busy="false" novalidate>
           <div class="form-field">
             <label for="item-name">物品名称 <span class="required-mark">*</span></label>
-            <input id="item-name" name="name" type="text" maxlength="50" autocomplete="off" placeholder="例如：蓝色水杯" required>
+            <input id="item-name" name="name" type="text" maxlength="50" autocomplete="off" placeholder="例如：蓝色水杯" aria-describedby="item-name-hint item-name-error" required>
+            <span id="item-name-hint" class="field-hint">最多 50 个字符</span>
+            <span id="item-name-error" class="field-error" hidden></span>
           </div>
           <div class="form-field">
             <label for="item-category">物品类别 <span class="required-mark">*</span></label>
-            <select id="item-category" name="category" required>
+            <select id="item-category" name="category" aria-describedby="item-category-error" required>
               <option value="">请选择物品类别</option>
               <option>校园卡</option><option>水杯</option><option>钥匙</option><option>雨伞</option>
               <option>电子设备</option><option>书籍文具</option><option>其他</option>
             </select>
+            <span id="item-category-error" class="field-error" hidden></span>
           </div>
           <div class="form-field">
             <label id="location-label" for="item-location">丢失地点 <span class="required-mark">*</span></label>
-            <input id="item-location" name="location" type="text" maxlength="100" autocomplete="off" placeholder="例如：图书馆二楼" required>
+            <input id="item-location" name="location" type="text" maxlength="100" autocomplete="off" placeholder="例如：图书馆二楼" aria-describedby="item-location-hint item-location-error" required>
+            <span id="item-location-hint" class="field-hint">最多 100 个字符</span>
+            <span id="item-location-error" class="field-error" hidden></span>
           </div>
           <div class="form-field">
             <label id="event-time-label" for="event-time">丢失时间 <span class="required-mark">*</span></label>
-            <input id="event-time" name="eventAt" type="datetime-local" required>
+            <input id="event-time" name="eventAt" type="datetime-local" aria-describedby="event-time-hint event-time-error" required>
+            <span id="event-time-hint" class="field-hint">请填写实际丢失或拾取时间，不能晚于当前时间</span>
+            <span id="event-time-error" class="field-error" hidden></span>
           </div>
           <div class="form-field">
             <label for="item-description">物品描述 <span class="required-mark">*</span></label>
-            <textarea id="item-description" name="description" maxlength="500" rows="4" placeholder="描述物品特征、遗失或拾取经过等（最多500字）" required></textarea>
-            <span class="field-hint">最多 500 字</span>
+            <textarea id="item-description" name="description" maxlength="500" rows="4" placeholder="描述物品特征、遗失或拾取经过等（最多500个字符）" aria-describedby="item-description-hint item-description-error" required></textarea>
+            <span id="item-description-hint" class="field-hint">最多 500 个字符</span>
+            <span id="item-description-error" class="field-error" hidden></span>
           </div>
           <div class="form-field">
             <label for="item-contact">联系方式 <span class="required-mark">*</span></label>
-            <input id="item-contact" name="contact" type="text" maxlength="80" autocomplete="off" placeholder="微信号或手机号" required>
-            <span class="field-hint">仅用于校园联系，请确认填写准确</span>
+            <input id="item-contact" name="contact" type="text" maxlength="80" autocomplete="off" placeholder="微信号或手机号" aria-describedby="item-contact-hint item-contact-error" required>
+            <span id="item-contact-hint" class="field-hint">最多 80 个字符；仅用于校园联系，请确认填写准确</span>
+            <span id="item-contact-error" class="field-error" hidden></span>
           </div>
-          <p id="form-error" class="form-message error-message" role="alert" hidden></p>
+          <p id="form-error" class="form-message error-message" role="alert" tabindex="-1" hidden></p>
           <p id="form-info" class="form-message info-message" role="status" hidden></p>
           <button id="submit-publish" class="primary-button" type="submit">发布信息</button>
         </form>
@@ -80,7 +89,7 @@
       <section id="success-view" class="success-view" aria-labelledby="success-title" hidden>
         <div class="success-mark" aria-hidden="true">✓</div>
         <p class="eyebrow">信息已保存到当前浏览器</p>
-        <h2 id="success-title">发布成功</h2>
+        <h2 id="success-title" tabindex="-1">发布成功</h2>
         <p class="success-item-name" id="success-item-name"></p>
         <div class="success-status-card"><span>当前状态</span><strong id="success-status"></strong></div>
         <p id="success-action-feedback" class="form-message info-message" role="status" hidden></p>

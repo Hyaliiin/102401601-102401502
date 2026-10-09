@@ -4,7 +4,19 @@
   const limits = { name: 50, location: 100, description: 500, contact: 80 };
   const categories = ["校园卡", "水杯", "钥匙", "雨伞", "电子设备", "书籍文具", "其他"];
 
-  function validate(values) {
+  function parseEventTime(value) {
+    const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(value);
+    if (!parts) return null;
+    const [, year, month, day, hour, minute, second = "0", fraction = "0"] = parts;
+    const date = new Date(value);
+    // Date 会把 2 月 30 日等输入自动滚到下个月，必须核对本地日期各部分。
+    if (Number(year) < 1 || date.getFullYear() !== Number(year) || date.getMonth() + 1 !== Number(month) ||
+        date.getDate() !== Number(day) || date.getHours() !== Number(hour) || date.getMinutes() !== Number(minute) ||
+        date.getSeconds() !== Number(second) || date.getMilliseconds() !== Number(fraction.padEnd(3, "0"))) return null;
+    return date;
+  }
+
+  function validate(values, now = Date.now()) {
     const errors = {};
     const fields = [
       ["name", "物品名称", limits.name],
@@ -21,7 +33,12 @@
       else if (maxLength && value.length > maxLength) errors[key] = `${label}不能超过${maxLength}个字符`;
     });
 
-    if (values.eventAt && Number.isNaN(new Date(values.eventAt).getTime())) errors.eventAt = "请选择有效的时间";
+    if (!errors.eventAt) {
+      const eventTime = parseEventTime(values.eventAt);
+      const timeLabel = values.type === "found" ? "拾取时间" : "丢失时间";
+      if (!eventTime) errors.eventAt = `请选择有效的${timeLabel}`;
+      else if (eventTime.getTime() > now) errors.eventAt = `${timeLabel}不能晚于当前时间`;
+    }
     if (values.category && !categories.includes(values.category)) errors.category = "请选择有效的物品类别";
     if (values.type !== "lost" && values.type !== "found") errors.type = "请选择发布寻物或发布招领";
     return { valid: Object.keys(errors).length === 0, errors };
