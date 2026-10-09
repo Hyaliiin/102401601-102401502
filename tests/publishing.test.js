@@ -52,7 +52,8 @@ class Element {
 
 function createApp(sharedStorage = new Map(), options = {}) {
   const ids = [
-    "home-view", "publish-view", "success-view", "header-title", "header-subtitle", "search-entry", "item-list", "result-count", "interaction-feedback",
+    "home-view", "search-view", "publish-view", "success-view", "header-title", "header-subtitle", "search-entry", "item-list", "result-count", "interaction-feedback",
+    "search-form", "search-keyword", "clear-search", "search-error", "search-suggestions", "search-results", "search-result-count", "search-summary", "search-result-list", "search-empty", "search-empty-message", "search-feedback", "search-back", "search-title", "no-result-search", "no-result-publish",
     "publish-form", "submit-publish", "form-error", "form-info", "location-label", "event-time-label", "item-location", "event-time", "item-name", "item-category", "item-description", "item-contact", "publish-title",
     "success-item-name", "success-status", "success-title", "success-action-feedback", "view-details", "continue-publishing", "return-home", "items-title",
     "item-name-error", "item-category-error", "item-location-error", "event-time-error", "item-description-error", "item-contact-error"
@@ -63,6 +64,7 @@ function createApp(sharedStorage = new Map(), options = {}) {
   elements["item-category"].value = "";
   elements["publish-form"].fields = ["item-name", "item-category", "item-location", "event-time", "item-description", "item-contact"].map((id) => elements[id]);
   const filters = ["lost", "found", "latest"].map((filter) => new Element({ filter }));
+  const quickKeywords = ["水杯", "钥匙", "笔记本"].map((keyword) => new Element({ keyword }));
   const modes = ["lost", "found"].map((mode) => new Element({ mode }));
   const nav = ["home", "publish", "my-posts"].map((page) => new Element({ page }));
   const document = {
@@ -76,6 +78,7 @@ function createApp(sharedStorage = new Map(), options = {}) {
     },
     querySelectorAll(selector) {
       if (selector === ".filter-tab") return filters;
+      if (selector === ".quick-keyword") return quickKeywords;
       if (selector === ".mode-button") return modes;
       if (selector === ".nav-item") return nav;
       return [];
@@ -89,7 +92,7 @@ function createApp(sharedStorage = new Map(), options = {}) {
   const window = { localStorage: options.localStorage || localStorage, setTimeout() {} };
   const context = vm.createContext({ document, window, console, Intl, Date: TestDate, Math, Set, Object, Array, JSON, Number, String });
   ["logic.js", "storage.js", "app.js"].forEach((file) => vm.runInContext(fs.readFileSync(path.join(root, "js", file), "utf8"), context, { filename: file }));
-  return { context, elements, filters, modes, nav, sharedStorage };
+  return { context, elements, filters, modes, nav, quickKeywords, sharedStorage };
 }
 
 function fillRequiredForm(elements, type = "lost", name = "蓝色水杯") {
@@ -383,3 +386,62 @@ test("特殊字符按文本展示，首页寻物/招领与最新排序不受影�
   assert.equal(app.elements["item-list"].children.length, 2);
   assert.ok(app.elements["item-list"].children.every((card) => card.children[0].children[0].textContent === "招领"));
 });
+
+test("搜索页面支持关键词、快捷词、空结果、清空、结果选择和返回首页", () => {
+  const userItem = {
+    id: "user-search-1", type: "lost", name: "用户发布的笔记本", category: "书籍文具", location: "新图书馆三楼",
+    eventAt: "2026-10-09T08:00:00.000Z", description: "红色封面，内页写有课程笔记", contact: "private-contact",
+    status: "searching", publishedAt: "2026-10-09T09:50:00.000Z", ownerId: "private-owner"
+  };
+  const shared = new Map([["shiguang.items.v1", JSON.stringify([userItem])]]);
+  const app = createApp(shared);
+  const { elements, filters, quickKeywords, context } = app;
+
+  filters[1].dispatch("click");
+  elements["search-entry"].dispatch("click");
+  assert.equal(elements["search-view"].hidden, false);
+  assert.equal(elements["header-title"].textContent, "搜索物品");
+  assert.equal(elements["search-suggestions"].hidden, false);
+
+  elements["search-keyword"].value = "  水杯  ";
+  elements["search-keyword"].dispatch("input");
+  elements["search-form"].dispatch("submit");
+  assert.equal(elements["search-results"].hidden, false);
+  assert.equal(elements["search-result-count"].textContent, "1 条");
+  assert.match(elements["search-summary"].textContent, /水杯/);
+  const sampleCard = elements["search-result-list"].children[0];
+  elements["search-result-list"].dispatch("click", { target: { closest: () => sampleCard } });
+  assert.equal(context.window.ShiguangApp.getSelectedItemId(), "item-001");
+  const cardText = collectText(sampleCard);
+  assert.equal(cardText.includes(userItem.contact), false, "卡片不展示联系方式");
+
+  quickKeywords[1].dispatch("click");
+  assert.equal(elements["search-keyword"].value, "钥匙");
+  assert.equal(elements["search-result-count"].textContent, "1 条");
+  elements["clear-search"].dispatch("click");
+  assert.equal(elements["search-keyword"].value, "");
+  assert.equal(elements["search-suggestions"].hidden, false);
+
+  elements["search-keyword"].value = "   ";
+  elements["search-form"].dispatch("submit");
+  assert.match(elements["search-error"].textContent, /请输入关键词/);
+  elements["search-keyword"].value = "<script>";
+  elements["search-form"].dispatch("submit");
+  assert.equal(elements["search-empty"].hidden, false);
+  assert.match(elements["search-empty-message"].textContent, /<script>/);
+  elements["no-result-search"].dispatch("click");
+  assert.equal(elements["search-suggestions"].hidden, false);
+  elements["search-keyword"].value = "课程笔记";
+  elements["search-form"].dispatch("submit");
+  assert.equal(elements["search-result-list"].children.length, 1, "可搜索本地发布的记录描述");
+  assert.equal(elements["search-result-list"].children[0].dataset.itemId, userItem.id);
+
+  elements["search-back"].dispatch("click");
+  assert.equal(elements["home-view"].hidden, false);
+  assert.equal(filters[1].attributes["aria-selected"], "true", "返回首页后原筛选保持不变");
+  assert.equal(elements["item-list"].children.length, 2);
+});
+
+function collectText(element) {
+  return `${element.textContent || ""}${element.children.map(collectText).join("")}`;
+}

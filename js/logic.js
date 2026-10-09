@@ -61,5 +61,22 @@
     };
   }
 
-  global.ShiguangLogic = Object.freeze({ validate, createItem, categories, limits });
+  function searchItems(items, keyword) {
+    if (!Array.isArray(items) || typeof keyword !== "string") return [];
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    if (!normalizedKeyword) return [];
+    const searchableFields = ["name", "category", "location", "description"];
+    return items.filter((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+      return searchableFields.some((field) => typeof item[field] === "string" && item[field].toLowerCase().includes(normalizedKeyword));
+    }).slice().sort((left, right) => {
+      const leftTime = typeof left.publishedAt === "string" ? Date.parse(left.publishedAt) : Number.NEGATIVE_INFINITY;
+      const rightTime = typeof right.publishedAt === "string" ? Date.parse(right.publishedAt) : Number.NEGATIVE_INFINITY;
+      const safeLeftTime = Number.isFinite(leftTime) ? leftTime : Number.NEGATIVE_INFINITY;
+      const safeRightTime = Number.isFinite(rightTime) ? rightTime : Number.NEGATIVE_INFINITY;
+      return safeRightTime - safeLeftTime;
+    });
+  }
+
+  global.ShiguangLogic = Object.freeze({ validate, createItem, searchItems, categories, limits });
 })(window);
