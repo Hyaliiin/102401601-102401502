@@ -74,3 +74,54 @@ test("无效输入集合和非字符串关键词安全返回空结果", () => {
   assert.equal(searchItems([item()], null).length, 0);
   assert.equal(searchItems([item()], { toString: () => "水杯" }).length, 0);
 });
+
+test("连续空格、全角空格和换行在关键词与字段中统一处理", () => {
+  const records = [item({ name: "Blue\t Bottle", description: "Near　　Library" })];
+  assert.equal(searchItems(records, "  bLuE　 bottle \n")[0].id, "demo-1");
+  assert.equal(searchItems(records, "NEAR\nLIBRARY")[0].id, "demo-1");
+});
+
+test("HTML、正则符号和引号仅按字面文本匹配", () => {
+  const records = [item({ name: '<img src="x">', description: 'A+B [C] .* "quoted" & 100%' })];
+  for (const keyword of ['<img src="x">', "A+B [C]", ".*", '"quoted"', "100%", "&"]) {
+    assert.equal(searchItems(records, keyword).length, 1);
+  }
+  assert.equal(searchItems(records, "^.*$").length, 0);
+});
+
+test("异常集合成员和无可用 ID 的记录不成为可点击结果", () => {
+  const records = [null, false, "杯", 12, [], {}, item({ id: null }), item({ id: "  " }), item({ id: 9 }), item({ id: "good", name: null, category: {}, location: 7, description: "杯" })];
+  assert.deepEqual(searchItems(records, "杯").map((record) => record.id), ["good"]);
+});
+
+test("不同时间偏移正确倒序；相同和缺失时间保持稳定且置后", () => {
+  const records = [
+    item({ id: "invalid-1", publishedAt: "invalid" }),
+    item({ id: "older", publishedAt: "2026-10-09T10:00:00+08:00" }),
+    item({ id: "tie-1", publishedAt: "2026-10-09T03:00:00Z" }),
+    item({ id: "missing", publishedAt: undefined }),
+    item({ id: "tie-2", publishedAt: "2026-10-09T11:00:00+08:00" }),
+    item({ id: "invalid-2", publishedAt: { toString: null } })
+  ];
+  const before = records.map((record) => record.id);
+  assert.deepEqual(searchItems(records, "杯").map((record) => record.id), ["tie-1", "tie-2", "older", "invalid-1", "missing", "invalid-2"]);
+  assert.deepEqual(records.map((record) => record.id), before);
+});
+
+test("连续搜索返回独立结果，并严格限定四个可搜索字段", () => {
+  const records = [item({ id: "only-in-id", status: "only-in-status", eventAt: "only-in-event", contact: "only-in-contact", ownerId: "only-in-owner" })];
+  const first = searchItems(records, "水杯");
+  assert.equal(searchItems(records, "钥匙").length, 0);
+  assert.equal(searchItems(records, "水杯").length, 1);
+  for (const keyword of ["only-in-id", "only-in-status", "only-in-event", "only-in-contact", "only-in-owner", "2026-10-09"]) {
+    assert.equal(searchItems(records, keyword).length, 0);
+  }
+  assert.equal(first.length, 1);
+  assert.equal(first[0], records[0]);
+});
+
+test("关键词 100 字符边界与输入框限制一致", () => {
+  const records = [item({ description: "x".repeat(101) })];
+  assert.equal(searchItems(records, "x".repeat(100)).length, 1);
+  assert.equal(searchItems(records, "x".repeat(101)).length, 0);
+});

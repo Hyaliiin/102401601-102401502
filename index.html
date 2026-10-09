@@ -39,15 +39,18 @@
           <button id="search-back" class="back-button" type="button" aria-label="返回首页">←</button>
           <div><p class="eyebrow">校园互助</p><h2 id="search-title" tabindex="-1">搜索物品</h2></div>
         </div>
-        <form id="search-form" class="search-form" role="search" novalidate>
+        <form id="search-form" class="search-form" role="search" aria-label="搜索校园物品" novalidate>
           <label class="sr-only" for="search-keyword">输入物品名称、类别、地点或描述</label>
           <div class="search-input-row">
-            <input id="search-keyword" name="keyword" type="search" maxlength="100" autocomplete="off" placeholder="输入物品名称、类别或地点">
+            <input id="search-keyword" name="keyword" type="search" maxlength="100" autocomplete="off" enterkeyhint="search" aria-describedby="search-hint search-error" aria-controls="search-results search-empty" placeholder="物品名称、类别、地点或描述">
             <button id="clear-search" class="clear-search" type="button" aria-label="清空关键词" hidden>×</button>
           </div>
           <button class="primary-button search-submit" type="submit">搜索</button>
+          <p id="search-hint" class="field-hint">最多 100 个字符；按 Enter 搜索，按 Esc 清空</p>
           <p id="search-error" class="form-message error-message" role="alert" hidden></p>
         </form>
+        <p id="search-status" class="sr-only" role="status" aria-atomic="true"></p>
+        <p id="search-feedback" class="form-message info-message search-feedback" role="status" hidden></p>
         <section id="search-suggestions" class="search-suggestions" aria-labelledby="suggestions-title">
           <h3 id="suggestions-title">试试这些关键词</h3>
           <div class="quick-keywords">
@@ -58,22 +61,22 @@
         </section>
         <section id="search-results" class="search-results" aria-labelledby="search-results-title" hidden>
           <div class="section-heading search-results-heading">
-            <h3 id="search-results-title">搜索结果</h3>
+            <h3 id="search-results-title" tabindex="-1">搜索结果</h3>
             <span id="search-result-count" class="result-count"></span>
           </div>
-          <p id="search-summary" class="search-summary" aria-live="polite"></p>
-          <div id="search-result-list" class="item-list" role="list" aria-live="polite" aria-label="搜索结果"></div>
+          <p id="search-summary" class="search-summary"></p>
+          <div id="search-result-list" class="item-list" role="group" aria-label="搜索结果卡片"></div>
+          <button id="refine-search" class="text-button search-refine" type="button">返回搜索框，修改关键词</button>
         </section>
         <section id="search-empty" class="search-empty" aria-labelledby="search-empty-title" hidden>
           <div class="search-empty-icon" aria-hidden="true">⌕</div>
-          <h3 id="search-empty-title">没有找到相关物品</h3>
+          <h3 id="search-empty-title" tabindex="-1" aria-describedby="search-empty-message">没有找到相关物品</h3>
           <p id="search-empty-message"></p>
           <div class="empty-actions">
             <button id="no-result-search" class="secondary-button" type="button">重新搜索</button>
             <button id="no-result-publish" class="primary-button" type="button">发布寻物</button>
           </div>
         </section>
-        <p id="search-feedback" class="sr-only" aria-live="assertive"></p>
       </section>
 
       <section id="publish-view" class="publish-view" aria-labelledby="publish-title" hidden>

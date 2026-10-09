@@ -39,12 +39,14 @@ class Element {
   addEventListener(type, handler) { this.handlers[type] = handler; }
   setAttribute(name, value) { this.attributes[name] = value; }
   removeAttribute(name) { delete this.attributes[name]; }
-  append(...nodes) { this.children.push(...nodes); }
-  replaceChildren(...nodes) { this.children = nodes; }
-  focus() { this.focused = true; }
+  append(...nodes) { nodes.forEach((node) => { node.parentElement = this; }); this.children.push(...nodes); }
+  replaceChildren(...nodes) { this.children.forEach((node) => { node.parentElement = null; }); this.children = []; this.append(...nodes); }
+  focus() { this.focused = true; if (this.ownerDocument) this.ownerDocument.activeElement = this; }
+  select() { this.selectionStart = 0; this.selectionEnd = this.value.length; }
+  closest(selector) { return this.classes.has(selector.slice(1)) ? this : this.parentElement?.closest(selector) || null; }
   reset() { this.fields.forEach((field) => { field.value = ""; }); }
   dispatch(type, event = {}) {
-    const payload = { target: this, preventDefault() {}, ...event };
+    const payload = { target: this, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...event };
     this.handlers[type]?.(payload);
     return payload;
   }
@@ -54,6 +56,7 @@ function createApp(sharedStorage = new Map(), options = {}) {
   const ids = [
     "home-view", "search-view", "publish-view", "success-view", "header-title", "header-subtitle", "search-entry", "item-list", "result-count", "interaction-feedback",
     "search-form", "search-keyword", "clear-search", "search-error", "search-suggestions", "search-results", "search-result-count", "search-summary", "search-result-list", "search-empty", "search-empty-message", "search-feedback", "search-back", "search-title", "no-result-search", "no-result-publish",
+    "search-results-title", "search-empty-title", "search-status", "refine-search",
     "publish-form", "submit-publish", "form-error", "form-info", "location-label", "event-time-label", "item-location", "event-time", "item-name", "item-category", "item-description", "item-contact", "publish-title",
     "success-item-name", "success-status", "success-title", "success-action-feedback", "view-details", "continue-publishing", "return-home", "items-title",
     "item-name-error", "item-category-error", "item-location-error", "event-time-error", "item-description-error", "item-contact-error"
@@ -83,8 +86,9 @@ function createApp(sharedStorage = new Map(), options = {}) {
       if (selector === ".nav-item") return nav;
       return [];
     },
-    createElement() { return new Element(); }
+    createElement() { const element = new Element(); element.ownerDocument = document; return element; }
   };
+  Object.values(elements).forEach((element) => { element.ownerDocument = document; });
   const localStorage = {
     getItem(key) { return sharedStorage.has(key) ? sharedStorage.get(key) : null; },
     setItem(key, value) { sharedStorage.set(key, String(value)); }
@@ -445,3 +449,176 @@ test("搜索页面支持关键词、快捷词、空结果、清空、结果选�
 function collectText(element) {
   return `${element.textContent || ""}${element.children.map(collectText).join("")}`;
 }
+
+function submitSearch(app, keyword) {
+  app.elements["search-keyword"].value = keyword;
+  app.elements["search-keyword"].dispatch("input");
+  app.elements["search-form"].dispatch("submit");
+}
+
+test("重复搜索、空结果和清空不会保留旧卡片、计数或选中 ID", () => {
+  const app = createApp();
+  const { elements, context } = app;
+  elements["search-entry"].dispatch("click");
+  submitSearch(app, "水杯");
+  const card = elements["search-result-list"].children[0];
+  elements["search-result-list"].dispatch("click", { target: card });
+  assert.equal(context.window.ShiguangApp.getSelectedItemId(), "item-001");
+  submitSearch(app, "不存在");
+  assert.equal(elements["search-result-list"].children.length, 0);
+  assert.equal(elements["search-result-count"].textContent, "");
+  assert.equal(context.window.ShiguangApp.getSelectedItemId(), null);
+  assert.equal(elements["search-feedback"].hidden, true);
+  for (let i = 0; i < 3; i += 1) submitSearch(app, "钥匙");
+  assert.equal(elements["search-result-list"].children.length, 1);
+  assert.equal(elements["search-result-list"].children[0].dataset.itemId, "item-002");
+  elements["clear-search"].dispatch("click");
+  assert.equal(elements["search-keyword"].value, "");
+  assert.equal(elements["search-result-list"].children.length, 0);
+  assert.equal(elements["search-summary"].textContent, "");
+  assert.equal(elements["search-empty-message"].textContent, "");
+  assert.match(elements["search-status"].textContent, /已清空/);
+  assert.equal(context.document.activeElement, elements["search-keyword"]);
+});
+
+test("快捷词、结果和空状态焦点明确，重新搜索保留并选中关键词", () => {
+  const app = createApp();
+  const { elements, context } = app;
+  elements["search-entry"].dispatch("click");
+  app.quickKeywords[0].dispatch("click");
+  assert.equal(elements["search-suggestions"].hidden, true);
+  assert.equal(context.document.activeElement, elements["search-results-title"]);
+  assert.match(elements["search-status"].textContent, /找到 1 条/);
+  elements["refine-search"].dispatch("click");
+  assert.equal(context.document.activeElement, elements["search-keyword"]);
+  assert.equal(elements["search-keyword"].selectionEnd, 2);
+  assert.equal(elements["search-result-list"].children.length, 1, "编辑前保留结果，实际输入时才重置");
+  submitSearch(app, "水杯拼写有误");
+  assert.equal(context.document.activeElement, elements["search-empty-title"]);
+  elements["no-result-search"].dispatch("click");
+  assert.equal(elements["search-keyword"].value, "水杯拼写有误");
+  assert.equal(elements["search-keyword"].selectionEnd, "水杯拼写有误".length);
+  assert.equal(context.document.activeElement, elements["search-keyword"]);
+  assert.equal(elements["search-suggestions"].hidden, false);
+});
+
+test("空白、超长输入和原生清空事件同步错误与页面状态", () => {
+  const app = createApp();
+  const { elements, context } = app;
+  elements["search-entry"].dispatch("click");
+  for (const keyword of ["", " \t　", "x".repeat(101)]) {
+    submitSearch(app, keyword);
+    elements["search-keyword"].dispatch("search");
+    assert.equal(elements["search-keyword"].attributes["aria-invalid"], "true");
+    assert.equal(elements["search-error"].hidden, false, "Enter 后的原生 search 事件不得清除错误提示");
+    assert.equal(context.document.activeElement, elements["search-keyword"]);
+    assert.equal(elements["search-result-list"].children.length, 0);
+  }
+  assert.match(elements["search-error"].textContent, /100/);
+  submitSearch(app, "水杯");
+  assert.equal(elements["search-keyword"].attributes["aria-invalid"], undefined);
+  elements["search-keyword"].value = "";
+  elements["search-keyword"].dispatch("search");
+  assert.equal(elements["clear-search"].hidden, true);
+  assert.equal(elements["search-suggestions"].hidden, false);
+  assert.equal(elements["search-result-list"].children.length, 0);
+});
+
+test("卡片支持 Enter 与空格，阻止滚动且忽略连按和输入法确认", () => {
+  const app = createApp();
+  const { elements, context } = app;
+  elements["search-entry"].dispatch("click");
+  for (const key of ["Enter", " "]) {
+    submitSearch(app, "水杯");
+    const card = elements["search-result-list"].children[0];
+    const event = elements["search-result-list"].dispatch("keydown", { key, target: card.children[1].children[1] });
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(context.window.ShiguangApp.getSelectedItemId(), "item-001");
+    assert.equal(elements["search-feedback"].hidden, false);
+  }
+  submitSearch(app, "水杯");
+  const card = elements["search-result-list"].children[0];
+  const repeat = elements["search-result-list"].dispatch("keydown", { key: " ", repeat: true, target: card });
+  assert.equal(repeat.defaultPrevented, true);
+  elements["search-result-list"].dispatch("keydown", { key: "Enter", isComposing: true, target: card });
+  elements["search-result-list"].dispatch("keydown", { key: "Enter" });
+  assert.equal(context.window.ShiguangApp.getSelectedItemId(), null);
+});
+
+test("中文组合输入不会意外提交或被 Esc 清空，完成后可搜索", () => {
+  const app = createApp();
+  const { elements } = app;
+  elements["search-entry"].dispatch("click");
+  elements["search-keyword"].dispatch("compositionstart");
+  submitSearch(app, "水杯");
+  elements["search-keyword"].dispatch("keydown", { key: "Escape", isComposing: true });
+  assert.equal(elements["search-keyword"].value, "水杯");
+  assert.equal(elements["search-results"].hidden, true);
+  elements["search-keyword"].dispatch("compositionend");
+  elements["search-form"].dispatch("submit");
+  assert.equal(elements["search-results"].hidden, false);
+  const escape = elements["search-keyword"].dispatch("keydown", { key: "Escape" });
+  assert.equal(escape.defaultPrevented, true);
+  assert.equal(elements["search-keyword"].value, "");
+  assert.equal(elements["search-result-list"].children.length, 0);
+});
+
+test("搜索后返回首页保留筛选且恢复入口焦点，再进入时无旧状态", () => {
+  const app = createApp();
+  const { elements, filters, context } = app;
+  filters[1].dispatch("click");
+  elements["search-entry"].dispatch("click");
+  submitSearch(app, "水杯");
+  elements["search-back"].dispatch("click");
+  assert.equal(filters[1].attributes["aria-selected"], "true");
+  assert.equal(elements["item-list"].children.length, 2);
+  assert.equal(context.document.activeElement, elements["search-entry"]);
+  elements["search-entry"].dispatch("click");
+  assert.equal(elements["search-keyword"].value, "");
+  assert.equal(elements["search-result-list"].children.length, 0);
+  assert.equal(elements["search-status"].textContent, "");
+  assert.equal(context.document.activeElement, elements["search-keyword"]);
+});
+
+test("缺失或异常显示字段不会令搜索渲染和选择崩溃", () => {
+  const app = createApp();
+  app.context.malformed = { id: "malformed", name: { toString: null }, category: "__proto__", location: {}, type: {}, status: {}, publishedAt: { toString: null }, description: "异常字段测试" };
+  vm.runInContext("allItems = [...sampleItems, malformed]", app.context);
+  app.elements["search-entry"].dispatch("click");
+  submitSearch(app, "异常字段测试");
+  const card = app.elements["search-result-list"].children[0];
+  assert.equal(card.dataset.itemId, "malformed");
+  assert.match(collectText(card), /未命名物品/);
+  assert.match(collectText(card), /时间未知/);
+  assert.equal(collectText(card).includes("[object Object]"), false);
+  app.elements["search-result-list"].dispatch("click", { target: card });
+  assert.equal(app.context.window.ShiguangApp.getSelectedItemId(), "malformed");
+});
+
+test("无结果转发布寻物不清空已有草稿，并聚焦名称", () => {
+  const app = createApp();
+  navClick(app, "publish");
+  app.modes[1].dispatch("click");
+  fillRequiredForm(app.elements, "found", "保留这份草稿");
+  navClick(app, "home");
+  app.elements["search-entry"].dispatch("click");
+  submitSearch(app, "无结果");
+  app.elements["no-result-publish"].dispatch("click");
+  assert.equal(app.elements["publish-view"].hidden, false);
+  assert.equal(app.elements["item-name"].value, "保留这份草稿");
+  assert.equal(app.modes[0].attributes["aria-pressed"], "true");
+  assert.equal(app.context.document.activeElement, app.elements["item-name"]);
+});
+
+test("本次会话新发布的数据立刻可搜索且卡片 ID 不变", () => {
+  const app = createApp();
+  fillRequiredForm(app.elements, "lost", "Blue Bottle");
+  app.elements["publish-form"].dispatch("submit");
+  const [saved] = JSON.parse(app.sharedStorage.get("shiguang.items.v1"));
+  app.elements["return-home"].dispatch("click");
+  app.elements["search-entry"].dispatch("click");
+  submitSearch(app, "bLuE　bottle");
+  assert.equal(app.elements["search-result-list"].children[0].dataset.itemId, saved.id);
+  submitSearch(app, saved.contact);
+  assert.equal(app.elements["search-result-list"].children.length, 0);
+});
