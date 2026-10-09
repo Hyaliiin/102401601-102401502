@@ -14,7 +14,7 @@ function getVisibleItems(filter) {
 
 function createItemCard(item) {
   const completedClass = item.status === "已归还" ? " completed" : "";
-  return `<article class="item-card" tabindex="0" data-item-id="${item.id}" aria-label="查看${item.name}详情">
+  return `<article class="item-card" role="button" tabindex="0" data-item-id="${item.id}" aria-label="查看${item.name}详情">
     <div class="card-top"><span class="type-label">${item.typeLabel}</span><span class="status-label${completedClass}">${item.status}</span></div>
     <div class="card-title-row"><span class="item-icon" aria-hidden="true">${item.icon}</span><h3 class="card-title">${item.name}</h3></div>
     <p class="card-location">📍 ${item.location}</p>
@@ -40,7 +40,11 @@ function selectFilter(button) {
 
 function showItemFeedback(card) {
   const item = demoItems.find((entry) => entry.id === card.dataset.itemId);
-  if (item) alert(`已选择“${item.name}”，详情页面将在后续阶段开放。`);
+  if (!item) return;
+  const feedback = document.querySelector("#interaction-feedback");
+  feedback.textContent = `已选择“${item.name}”，详情页面将在后续阶段开放。`;
+  card.classList.add("is-selected");
+  window.setTimeout(() => card.classList.remove("is-selected"), 700);
 }
 
 document.querySelectorAll(".filter-tab").forEach((button) => button.addEventListener("click", () => selectFilter(button)));
@@ -49,7 +53,11 @@ document.querySelector("#item-list").addEventListener("click", (event) => {
   if (card) showItemFeedback(card);
 });
 document.querySelector("#item-list").addEventListener("keydown", (event) => {
-  if (event.key === "Enter" || event.key === " ") showItemFeedback(event.target);
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const card = event.target.closest(".item-card");
+  if (!card) return;
+  event.preventDefault();
+  showItemFeedback(card);
 });
 document.querySelector("#search-entry").addEventListener("click", () => alert("搜索功能将在后续阶段开放。"));
 renderItems("lost");
