@@ -27,6 +27,8 @@ const searchSuggestions = document.querySelector("#search-suggestions");
 const searchResultsSection = document.querySelector("#search-results");
 const searchResultList = document.querySelector("#search-result-list");
 const searchEmpty = document.querySelector("#search-empty");
+const searchStatus = document.querySelector("#search-status");
+const searchFeedback = document.querySelector("#search-feedback");
 const quickKeywords = document.querySelectorAll(".quick-keyword");
 const homeNav = document.querySelector('[data-page="home"]');
 const publishNav = document.querySelector('[data-page="publish"]');
@@ -57,6 +59,8 @@ let isSubmitting = false;
 let lastPublishedItem = null;
 let hasValidationErrors = false;
 let selectedItemId = null;
+let isSearchComposing = false;
+let previousSearchValue = "";
 
 window.ShiguangApp = Object.freeze({ getSelectedItemId: () => selectedItemId });
 
@@ -73,38 +77,45 @@ function visibleItems(filter) {
 }
 
 function formatPublishedAt(value) {
+  if (typeof value !== "string") return "时间未知";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "时间未知";
   return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 function createItemCard(item) {
+  const name = typeof item.name === "string" && item.name.trim() ? item.name : "未命名物品";
+  const locationText = typeof item.location === "string" && item.location.trim() ? item.location : "地点未提供";
   const card = document.createElement("article");
   card.className = "item-card";
   card.setAttribute("role", "button");
   card.setAttribute("tabindex", "0");
   card.dataset.itemId = item.id;
-  card.setAttribute("aria-label", `查看${item.name}详情`);
+  card.setAttribute("aria-label", `查看${name}详情`);
 
   const top = document.createElement("div");
   top.className = "card-top";
-  top.append(textElement("span", "type-label", typeLabels[item.type] || "信息"));
-  const status = textElement("span", `status-label${["returned", "recovered"].includes(item.status) ? " completed" : ""}`, statusLabels[item.status] || "状态未知");
+  top.append(textElement("span", "type-label", lookupLabel(typeLabels, item.type, "信息")));
+  const status = textElement("span", `status-label${["returned", "recovered"].includes(item.status) ? " completed" : ""}`, lookupLabel(statusLabels, item.status, "状态未知"));
   top.append(status);
 
   const titleRow = document.createElement("div");
   titleRow.className = "card-title-row";
-  const icon = textElement("span", "item-icon", itemIcons[item.category] || itemIcons["其他"]);
+  const icon = textElement("span", "item-icon", lookupLabel(itemIcons, item.category, itemIcons["其他"]));
   icon.setAttribute("aria-hidden", "true");
-  titleRow.append(icon, textElement("h3", "card-title", item.name));
+  titleRow.append(icon, textElement("h3", "card-title", name));
 
-  const location = textElement("p", "card-location", `📍 ${item.location}`);
+  const location = textElement("p", "card-location", `📍 ${locationText}`);
   const meta = document.createElement("div");
   meta.className = "card-meta";
   meta.append(textElement("span", "", `发布于 ${formatPublishedAt(item.publishedAt)}`));
   meta.append(textElement("span", "", "查看详情 ›"));
   card.append(top, titleRow, location, meta);
   return card;
+}
+
+function lookupLabel(labels, value, fallback) {
+  return typeof value === "string" && Object.hasOwn(labels, value) ? labels[value] : fallback;
 }
 
 function renderItems(filter) {
@@ -140,7 +151,9 @@ function showItemFeedback(card) {
   const feedback = viewElements.search.hidden
     ? document.querySelector("#interaction-feedback")
     : document.querySelector("#search-feedback");
-  feedback.textContent = `已选择“${item.name}”，详情页面将在后续阶段开放。`;
+  const name = typeof item.name === "string" ? item.name : "未命名物品";
+  feedback.textContent = `已选择“${name}”，详情页面将在后续阶段开放。`;
+  if (feedback === searchFeedback) feedback.hidden = false;
   card.classList.add("is-selected");
   window.setTimeout(() => card.classList.remove("is-selected"), 700);
 }
@@ -179,35 +192,48 @@ function showSearchInputState() {
   searchEmpty.hidden = true;
   searchError.hidden = true;
   searchError.textContent = "";
+  searchInput.removeAttribute("aria-invalid");
+  searchResultList.replaceChildren();
+  document.querySelector("#search-result-count").textContent = "";
+  document.querySelector("#search-summary").textContent = "";
+  document.querySelector("#search-empty-message").textContent = "";
+  searchStatus.textContent = "";
+  searchFeedback.textContent = "";
+  searchFeedback.hidden = true;
+  selectedItemId = null;
 }
 
-function resetSearch() {
+function resetSearch(announce = false) {
   searchInput.value = "";
+  previousSearchValue = "";
   clearSearchButton.hidden = true;
-  document.querySelector("#search-feedback").textContent = "";
   showSearchInputState();
+  if (announce) searchStatus.textContent = "已清空关键词，请重新输入或选择快捷关键词。";
 }
 
 function performSearch() {
   const keyword = searchInput.value.trim();
+  previousSearchValue = searchInput.value;
+  showSearchInputState();
   clearSearchButton.hidden = searchInput.value.length === 0;
-  if (!keyword) {
-    searchSuggestions.hidden = false;
-    searchResultsSection.hidden = true;
-    searchEmpty.hidden = true;
-    searchError.textContent = "请输入关键词后再搜索。";
+  if (!keyword || keyword.length > window.ShiguangLogic.searchKeywordLimit) {
+    searchError.textContent = keyword ? `关键词不能超过 ${window.ShiguangLogic.searchKeywordLimit} 个字符。` : "请输入关键词后再搜索。";
     searchError.hidden = false;
+    searchInput.setAttribute("aria-invalid", "true");
     searchInput.focus();
     return;
   }
 
-  searchError.hidden = true;
+  searchInput.value = keyword;
+  previousSearchValue = keyword;
   searchSuggestions.hidden = true;
   const results = window.ShiguangLogic.searchItems(allItems, keyword);
   if (!results.length) {
     searchResultsSection.hidden = true;
     searchEmpty.hidden = false;
     document.querySelector("#search-empty-message").textContent = `没有找到包含“${keyword}”的物品。你可以换个关键词，或发布寻物信息。`;
+    searchStatus.textContent = `没有找到“${keyword}”的相关物品。`;
+    document.querySelector("#search-empty-title").focus();
     return;
   }
 
@@ -215,8 +241,9 @@ function performSearch() {
   searchResultsSection.hidden = false;
   document.querySelector("#search-result-count").textContent = `${results.length} 条`;
   document.querySelector("#search-summary").textContent = `“${keyword}”的搜索结果，共 ${results.length} 条信息`;
-  searchResultList.replaceChildren();
   results.forEach((item) => searchResultList.append(createItemCard(item)));
+  searchStatus.textContent = `找到 ${results.length} 条相关信息，按发布时间从新到旧排列。`;
+  document.querySelector("#search-results-title").focus();
 }
 
 function setMode(mode) {
@@ -349,9 +376,11 @@ tabs.forEach((button) => button.addEventListener("click", () => selectFilter(but
   });
   list.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
+    if (event.isComposing) return;
     const card = event.target.closest(".item-card");
     if (!card) return;
     event.preventDefault();
+    if (event.repeat) return;
     showItemFeedback(card);
   });
 });
@@ -382,15 +411,30 @@ searchButton.addEventListener("click", () => {
 });
 searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
+  if (isSearchComposing || event.isComposing) return;
   performSearch();
 });
-searchInput.addEventListener("input", () => {
+function handleSearchInput() {
+  previousSearchValue = searchInput.value;
   clearSearchButton.hidden = searchInput.value.length === 0;
-  document.querySelector("#search-feedback").textContent = "";
   showSearchInputState();
+}
+searchInput.addEventListener("input", handleSearchInput);
+searchInput.addEventListener("compositionstart", () => { isSearchComposing = true; });
+searchInput.addEventListener("compositionend", () => { isSearchComposing = false; });
+searchInput.addEventListener("search", () => {
+  // Chrome 在 Enter 提交时也会触发 search；只处理从有内容到清空的变化。
+  if (!searchInput.value && previousSearchValue) handleSearchInput();
+});
+searchInput.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !event.isComposing && !isSearchComposing) {
+    event.preventDefault();
+    resetSearch(true);
+    searchInput.focus();
+  }
 });
 clearSearchButton.addEventListener("click", () => {
-  resetSearch();
+  resetSearch(true);
   searchInput.focus();
 });
 quickKeywords.forEach((button) => button.addEventListener("click", () => {
@@ -398,15 +442,23 @@ quickKeywords.forEach((button) => button.addEventListener("click", () => {
   clearSearchButton.hidden = false;
   performSearch();
 }));
-document.querySelector("#search-back").addEventListener("click", () => showPage("home"));
+document.querySelector("#search-back").addEventListener("click", () => {
+  showPage("home");
+  searchButton.focus();
+});
 document.querySelector("#no-result-search").addEventListener("click", () => {
-  resetSearch();
+  showSearchInputState();
   searchInput.focus();
+  searchInput.select();
+});
+document.querySelector("#refine-search").addEventListener("click", () => {
+  searchInput.focus();
+  searchInput.select();
 });
 document.querySelector("#no-result-publish").addEventListener("click", () => {
-  resetForm();
-  setMode("lost");
   showPage("publish");
+  setMode("lost");
+  fieldInputs.name.focus();
 });
 document.querySelector("#view-details").addEventListener("click", () => {
   const feedback = document.querySelector("#success-action-feedback");

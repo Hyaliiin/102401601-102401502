@@ -61,22 +61,30 @@
     };
   }
 
+  const searchKeywordLimit = 100;
+
+  function normalizeSearchText(value) {
+    return value.trim().replace(/\s+/g, " ").toLowerCase();
+  }
+
   function searchItems(items, keyword) {
     if (!Array.isArray(items) || typeof keyword !== "string") return [];
-    const normalizedKeyword = keyword.trim().toLowerCase();
+    if (keyword.trim().length > searchKeywordLimit) return [];
+    const normalizedKeyword = normalizeSearchText(keyword);
     if (!normalizedKeyword) return [];
     const searchableFields = ["name", "category", "location", "description"];
     return items.filter((item) => {
       if (!item || typeof item !== "object" || Array.isArray(item)) return false;
-      return searchableFields.some((field) => typeof item[field] === "string" && item[field].toLowerCase().includes(normalizedKeyword));
-    }).slice().sort((left, right) => {
+      if (typeof item.id !== "string" || !item.id.trim()) return false;
+      return searchableFields.some((field) => typeof item[field] === "string" && normalizeSearchText(item[field]).includes(normalizedKeyword));
+    }).sort((left, right) => {
       const leftTime = typeof left.publishedAt === "string" ? Date.parse(left.publishedAt) : Number.NEGATIVE_INFINITY;
       const rightTime = typeof right.publishedAt === "string" ? Date.parse(right.publishedAt) : Number.NEGATIVE_INFINITY;
       const safeLeftTime = Number.isFinite(leftTime) ? leftTime : Number.NEGATIVE_INFINITY;
       const safeRightTime = Number.isFinite(rightTime) ? rightTime : Number.NEGATIVE_INFINITY;
-      return safeRightTime - safeLeftTime;
+      return safeRightTime === safeLeftTime ? 0 : safeRightTime - safeLeftTime;
     });
   }
 
-  global.ShiguangLogic = Object.freeze({ validate, createItem, searchItems, categories, limits });
+  global.ShiguangLogic = Object.freeze({ validate, createItem, searchItems, searchKeywordLimit, categories, limits });
 })(window);
