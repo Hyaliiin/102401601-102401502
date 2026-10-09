@@ -93,5 +93,43 @@
       typeof item.id === "string" && item.id === id) || null;
   }
 
-  global.ShiguangLogic = Object.freeze({ validate, createItem, searchItems, getItemById, searchKeywordLimit, categories, limits });
+  function getCompletedStatus(item) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    if (item.type === "lost") return "recovered";
+    if (item.type === "found") return "returned";
+    return null;
+  }
+
+  function completionCheck(item, ownedItems) {
+    if (!item || typeof item !== "object" || Array.isArray(item) || typeof item.id !== "string" || !item.id.trim()) {
+      return { ok: false, reason: "invalid-id" };
+    }
+    if (!Array.isArray(ownedItems)) return { ok: false, reason: "not-owned" };
+    const matches = ownedItems.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry) && entry.id === item.id);
+    if (matches.length !== 1 || item.ownerId === "demo") return { ok: false, reason: "not-owned" };
+    const owned = matches[0];
+    if (owned.ownerId === "demo" || owned.type !== item.type || owned.status !== item.status || owned.ownerId !== item.ownerId) {
+      return { ok: false, reason: "stale" };
+    }
+    const completedStatus = getCompletedStatus(owned);
+    if (!completedStatus) return { ok: false, reason: "invalid-type" };
+    if (owned.status === completedStatus || owned.status === "recovered" || owned.status === "returned") {
+      return { ok: false, reason: "already-completed" };
+    }
+    const expectedStatus = owned.type === "lost" ? "searching" : "pending";
+    if (owned.status !== expectedStatus) return { ok: false, reason: "invalid-status" };
+    return { ok: true, owned, completedStatus };
+  }
+
+  function canCompleteItem(item, ownedItems) {
+    return completionCheck(item, ownedItems).ok;
+  }
+
+  function completeItem(item, ownedItems) {
+    const check = completionCheck(item, ownedItems);
+    if (!check.ok) return check;
+    return { ok: true, item: { ...check.owned, status: check.completedStatus } };
+  }
+
+  global.ShiguangLogic = Object.freeze({ validate, createItem, searchItems, getItemById, getCompletedStatus, canCompleteItem, completeItem, searchKeywordLimit, categories, limits });
 })(window);

@@ -48,6 +48,15 @@
     return ownerId;
   }
 
+  function loadOwnerId() {
+    try {
+      const ownerId = global.localStorage.getItem(OWNER_KEY);
+      return typeof ownerId === "string" && ownerId.trim() ? ownerId : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function saveItem(item) {
     const loaded = loadItems();
     if (!loaded.ok) return { ok: false, reason: loaded.reason };
@@ -63,11 +72,42 @@
     }
   }
 
+  function updateItemStatus(id, nextStatus) {
+    if (typeof id !== "string" || !id.trim()) return { ok: false, reason: "invalid-id" };
+    const loaded = loadItems();
+    if (!loaded.ok) return { ok: false, reason: loaded.reason };
+    const matches = loaded.items.filter((item) => item.id === id);
+    if (matches.length !== 1) return { ok: false, reason: matches.length ? "ambiguous" : "not-found" };
+    const item = matches[0];
+    const ownerId = loadOwnerId();
+    if (!ownerId || item.ownerId !== ownerId || item.ownerId === "demo") return { ok: false, reason: "not-owned" };
+    const transitions = {
+      lost: { from: "searching", to: "recovered" },
+      found: { from: "pending", to: "returned" }
+    };
+    const transition = transitions[item.type];
+    if (!transition) return { ok: false, reason: "invalid-type" };
+    if (nextStatus !== transition.to) return { ok: false, reason: "invalid-transition" };
+    if (item.status !== transition.from) {
+      return { ok: false, reason: ["recovered", "returned"].includes(item.status) ? "already-completed" : "invalid-status" };
+    }
+    const updatedItem = { ...item, status: transition.to };
+    const updatedItems = loaded.items.map((entry) => entry.id === id ? updatedItem : entry);
+    try {
+      global.localStorage.setItem(ITEMS_KEY, JSON.stringify(updatedItems));
+      return { ok: true, item: updatedItem };
+    } catch (error) {
+      return { ok: false, reason: error.name === "QuotaExceededError" ? "quota" : "unavailable" };
+    }
+  }
+
   global.ShiguangStorage = Object.freeze({
     loadItems,
     saveItem,
     getOwnerId,
+    loadOwnerId,
     createId,
+    updateItemStatus,
     itemsKey: ITEMS_KEY
   });
 })(window);

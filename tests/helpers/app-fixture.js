@@ -30,12 +30,14 @@ class Element {
     this.firstChild = { textContent: "" };
     this.hidden = false;
     this.value = "";
-    this.textContent = "";
+    this._textContent = "";
     this.disabled = false;
     this.open = false;
     this.scrollTop = 0;
   }
   set innerHTML(_) { throw new Error("用户内容必须通过安全 DOM API 渲染"); }
+  set textContent(value) { this._textContent = String(value); }
+  get textContent() { return this._textContent + this.children.map((child) => child.textContent).join(""); }
   showModal() { this.open = true; this.modal = true; }
   close() { this.open = false; this.modal = false; this.dispatch("close"); }
   set className(value) { this.classes = new Set(value.split(/\s+/).filter(Boolean)); }
@@ -70,6 +72,7 @@ function createApp(sharedStorage = new Map(), options = {}) {
   const filters = ["lost", "found", "latest"].map((filter) => new Element({ filter }));
   const quickKeywords = ["水杯", "钥匙", "笔记本"].map((keyword) => new Element({ keyword }));
   const modes = ["lost", "found"].map((mode) => new Element({ mode }));
+  const myPostFilters = ["all", "active", "completed"].map((myFilter) => new Element({ myFilter }));
   const nav = ["home", "publish", "my-posts"].map((page) => new Element({ page }));
   const document = {
     body: new Element(),
@@ -85,16 +88,21 @@ function createApp(sharedStorage = new Map(), options = {}) {
       if (selector === ".filter-tab") return filters;
       if (selector === ".quick-keyword") return quickKeywords;
       if (selector === ".mode-button") return modes;
+      if (selector === ".my-post-filter") return myPostFilters;
       if (selector === ".nav-item") return nav;
       return [];
     },
     createElement() { const element = new Element(); element.ownerDocument = document; return element; }
   };
   Object.values(elements).forEach((element) => { element.ownerDocument = document; });
+  [...filters, ...quickKeywords, ...modes, ...myPostFilters, ...nav].forEach((element) => { element.ownerDocument = document; });
   const localStorage = {
     getItem(key) { return sharedStorage.has(key) ? sharedStorage.get(key) : null; },
     setItem(key, value) { sharedStorage.set(key, String(value)); }
   };
+  if (!sharedStorage.has("shiguang.owner.v1") && options.ownerId !== null) {
+    sharedStorage.set("shiguang.owner.v1", options.ownerId || "local-owner");
+  }
   const location = { hash: options.hash || "" };
   const window = {
     handlers: {},
@@ -107,7 +115,7 @@ function createApp(sharedStorage = new Map(), options = {}) {
   };
   const context = vm.createContext({ document, window, console, Intl, Date: TestDate, Math, Set, Object, Array, JSON, Number, String });
   ["logic.js", "storage.js", "app.js"].forEach((file) => vm.runInContext(fs.readFileSync(path.join(root, "js", file), "utf8"), context, { filename: file }));
-  return { context, elements, filters, modes, nav, quickKeywords, sharedStorage };
+  return { context, elements, filters, modes, myPostFilters, nav, quickKeywords, sharedStorage };
 }
 
 function fillRequiredForm(elements, type = "lost", name = "蓝色水杯") {

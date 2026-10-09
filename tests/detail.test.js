@@ -263,7 +263,7 @@ test("空联系方式有友好提示且不能复制，不残留其他物品内�
 test("已找回和已归还状态显示正确，换为进行中时清除完成样式", () => {
   const app = storedApp([record({ status: "recovered" })]);
   clickCard(app, "user-a");
-  assert.equal(app.elements["detail-status"].textContent, "已找回");
+  assert.equal(app.elements["detail-status"].textContent, "已找到");
   assert.ok(app.elements["detail-status"].classes.has("completed"));
   app.elements["detail-back"].dispatch("click");
   clickCard(app, "item-001");

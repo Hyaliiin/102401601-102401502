@@ -103,8 +103,29 @@
           <h4>物品描述</h4>
           <p id="detail-description" class="detail-description"></p>
         </article>
+        <p id="detail-status-feedback" class="form-message info-message" role="status" aria-live="polite" hidden></p>
+        <button id="complete-item" class="primary-button detail-contact-button" type="button" aria-haspopup="dialog" aria-controls="status-confirm-dialog" hidden></button>
         <button id="view-contact" class="primary-button detail-contact-button" type="button" aria-haspopup="dialog" aria-controls="contact-dialog" hidden>查看联系方式</button>
         <p class="field-hint">本页面仅展示当前浏览器的本地记录，不支持跨设备共享。</p>
+      </section>
+
+      <section id="my-posts-view" class="my-posts-view" aria-labelledby="my-posts-title" hidden>
+        <div class="my-posts-heading">
+          <p class="eyebrow">校园互助</p>
+          <h2 id="my-posts-title" tabindex="-1">我的发布</h2>
+          <p>记录每一条线索，也记录每一次找回。</p>
+        </div>
+        <section class="my-post-stats" aria-label="我的信息统计">
+          <div><span>我的信息</span><strong id="my-post-count">0</strong><span>条发布记录</span></div>
+          <p id="my-post-filter-count" role="status" aria-live="polite">全部 0 条</p>
+        </section>
+        <div class="my-post-filters" role="tablist" aria-label="筛选我的发布">
+          <button class="my-post-filter active" type="button" role="tab" aria-selected="true" aria-controls="my-post-list" tabindex="0" data-my-filter="all">全部</button>
+          <button class="my-post-filter" type="button" role="tab" aria-selected="false" aria-controls="my-post-list" tabindex="-1" data-my-filter="active">进行中</button>
+          <button class="my-post-filter" type="button" role="tab" aria-selected="false" aria-controls="my-post-list" tabindex="-1" data-my-filter="completed">已完成</button>
+        </div>
+        <div id="my-post-list" class="item-list my-post-list" role="tabpanel" tabindex="0" aria-live="polite" aria-label="我的发布记录"></div>
+        <p id="my-post-error" class="form-message error-message" role="alert" hidden></p>
       </section>
 
       <section id="publish-view" class="publish-view" aria-labelledby="publish-title" hidden>
@@ -183,7 +204,7 @@
         <span aria-hidden="true">＋</span>
         <span>发布</span>
       </a>
-      <a class="nav-item" href="#my-posts" data-page="my-posts" aria-label="我的发布（后续开发）">
+      <a class="nav-item" href="#my-posts" data-page="my-posts">
         <span aria-hidden="true">♡</span>
         <span>我的发布</span>
       </a>
@@ -205,6 +226,19 @@
     <p id="copy-feedback" class="form-message info-message" role="status" aria-live="polite" aria-atomic="true"></p>
     <button id="select-contact" class="secondary-button" type="button" hidden>选中全部，手动复制</button>
     <button id="copy-contact" class="primary-button" type="button" aria-busy="false">一键复制</button>
+  </dialog>
+
+  <dialog id="status-confirm-dialog" class="contact-dialog status-confirm-dialog" aria-labelledby="status-confirm-title" aria-describedby="status-confirm-description status-confirm-error" aria-modal="true">
+    <div class="contact-heading">
+      <h2 id="status-confirm-title">确认完成？</h2>
+      <button id="close-status-confirm" class="back-button" type="button" aria-label="关闭状态确认">×</button>
+    </div>
+    <p id="status-confirm-description" class="status-confirm-description"></p>
+    <p id="status-confirm-error" class="form-message error-message" role="alert" hidden></p>
+    <div class="status-confirm-actions">
+      <button id="cancel-status-update" class="secondary-button" type="button">暂不修改</button>
+      <button id="confirm-status-update" class="primary-button" type="button">确认完成</button>
+    </div>
   </dialog>
 
   <script src="js/logic.js"></script>

@@ -8,14 +8,15 @@ const sampleItems = [
 
 const itemIcons = { 校园卡: "🎫", 水杯: "🥤", 钥匙: "🔑", 雨伞: "☂️", 电子设备: "🎧", 书籍文具: "📚", 其他: "📦" };
 const typeLabels = { lost: "寻物", found: "招领" };
-const statusLabels = { searching: "寻找中", pending: "待认领", recovered: "已找回", returned: "已归还" };
+const statusLabels = { searching: "寻找中", pending: "待认领", recovered: "已找到", returned: "已归还" };
 const filterLabels = { lost: "寻物信息", found: "招领信息", latest: "最新发布" };
 const viewElements = {
   home: document.querySelector("#home-view"),
   search: document.querySelector("#search-view"),
   publish: document.querySelector("#publish-view"),
   success: document.querySelector("#success-view"),
-  detail: document.querySelector("#detail-view")
+  detail: document.querySelector("#detail-view"),
+  "my-posts": document.querySelector("#my-posts-view")
 };
 const headerTitle = document.querySelector("#header-title");
 const headerSubtitle = document.querySelector("#header-subtitle");
@@ -33,7 +34,13 @@ const searchFeedback = document.querySelector("#search-feedback");
 const quickKeywords = document.querySelectorAll(".quick-keyword");
 const homeNav = document.querySelector('[data-page="home"]');
 const publishNav = document.querySelector('[data-page="publish"]');
+const myPostsNav = document.querySelector('[data-page="my-posts"]');
 const tabs = document.querySelectorAll(".filter-tab");
+const myPostFilters = document.querySelectorAll(".my-post-filter");
+const myPostList = document.querySelector("#my-post-list");
+const myPostFilterCount = document.querySelector("#my-post-filter-count");
+const myPostFilterLabels = { all: "全部", active: "进行中", completed: "已完成" };
+let currentOwnerId = window.ShiguangStorage.loadOwnerId();
 const form = document.querySelector("#publish-form");
 const submitButton = document.querySelector("#submit-publish");
 const formError = document.querySelector("#form-error");
@@ -62,6 +69,7 @@ let hasValidationErrors = false;
 let selectedItemId = null;
 let isSearchComposing = false;
 let previousSearchValue = "";
+let currentMyPostFilter = "all";
 let currentPage = "home";
 let detailItemId = null;
 let detailReturn = { page: "home", id: null, scrollTop: 0, windowY: 0 };
@@ -76,6 +84,12 @@ const copyFeedback = document.querySelector("#copy-feedback");
 let contactSession = 0;
 let contactSessionActive = false;
 let isCopying = false;
+const statusDialog = document.querySelector("#status-confirm-dialog");
+const completeItemButton = document.querySelector("#complete-item");
+const confirmStatusButton = document.querySelector("#confirm-status-update");
+const cancelStatusButton = document.querySelector("#cancel-status-update");
+const statusDialogError = document.querySelector("#status-confirm-error");
+let isStatusUpdating = false;
 
 window.ShiguangApp = Object.freeze({
   getSelectedItemId: () => selectedItemId,
@@ -152,6 +166,70 @@ function renderItems(filter) {
   items.forEach((item) => list.append(createItemCard(item)));
 }
 
+function ownedItems() {
+  if (typeof currentOwnerId !== "string" || !currentOwnerId.trim()) return [];
+  return userItems.filter((item) => item && item.ownerId === currentOwnerId && item.ownerId !== "demo");
+}
+
+function renderMyPosts() {
+  const records = [...ownedItems()].sort((left, right) => {
+    const leftTime = Date.parse(left.publishedAt);
+    const rightTime = Date.parse(right.publishedAt);
+    return (Number.isFinite(rightTime) ? rightTime : Number.NEGATIVE_INFINITY) -
+      (Number.isFinite(leftTime) ? leftTime : Number.NEGATIVE_INFINITY);
+  });
+  document.querySelector("#my-post-count").textContent = String(records.length);
+  const filtered = records.filter((item) => {
+    if (currentMyPostFilter === "active") return ["searching", "pending"].includes(item.status);
+    if (currentMyPostFilter === "completed") return ["recovered", "returned"].includes(item.status);
+    return true;
+  });
+  myPostFilterCount.textContent = `${myPostFilterLabels[currentMyPostFilter]} ${filtered.length} 条`;
+  myPostList.replaceChildren();
+  if (filtered.length) {
+    filtered.forEach((item) => myPostList.append(createItemCard(item)));
+    return;
+  }
+  const empty = document.createElement("div");
+  empty.className = "empty-state my-post-empty";
+  if (!records.length) {
+    empty.append(textElement("strong", "", "还没有发布记录"));
+    empty.append(textElement("span", "", "发布一条寻物或招领信息，线索就会保存在这里。"));
+    const publish = textElement("button", "primary-button", "去发布");
+    publish.type = "button";
+    publish.addEventListener("click", () => { showPage("publish"); fieldInputs.name.focus(); });
+    empty.append(publish);
+  } else {
+    empty.append(textElement("strong", "", `暂无${myPostFilterLabels[currentMyPostFilter]}信息`));
+    empty.append(textElement("span", "", "切换筛选条件，查看其他发布记录。"));
+    const reset = textElement("button", "secondary-button", "查看全部");
+    reset.type = "button";
+    reset.addEventListener("click", () => selectMyPostFilter(myPostFilters.find((tab) => tab.dataset.myFilter === "all")));
+    empty.append(reset);
+  }
+  myPostList.append(empty);
+}
+
+function selectMyPostFilter(button) {
+  if (!button) return;
+  currentMyPostFilter = button.dataset.myFilter;
+  myPostFilters.forEach((tab) => {
+    const selected = tab === button;
+    tab.classList.toggle("active", selected);
+    tab.setAttribute("aria-selected", String(selected));
+    tab.setAttribute("tabindex", selected ? "0" : "-1");
+  });
+  renderMyPosts();
+}
+
+function renderCurrentSearchResults() {
+  if (searchResultsSection.hidden) return;
+  const results = window.ShiguangLogic.searchItems(allItems, searchInput.value);
+  searchResultList.replaceChildren(...results.map(createItemCard));
+  document.querySelector("#search-result-count").textContent = `${results.length} 条`;
+  document.querySelector("#search-summary").textContent = `“${searchInput.value}”的搜索结果，共 ${results.length} 条信息`;
+}
+
 function selectFilter(button) {
   currentFilter = button.dataset.filter;
   tabs.forEach((tab) => {
@@ -163,7 +241,8 @@ function selectFilter(button) {
 }
 
 function showItemFeedback(card) {
-  const item = window.ShiguangLogic.getItemById(allItems, card.dataset.itemId);
+  const sourceItems = card.parentElement === myPostList ? ownedItems() : allItems;
+  const item = window.ShiguangLogic.getItemById(sourceItems, card.dataset.itemId);
   if (!item) return;
   selectedItemId = item.id;
   const feedback = card.parentElement === searchResultList
@@ -181,6 +260,7 @@ function showItemFeedback(card) {
 function showPage(page) {
   if (currentPage === "detail" && page !== "detail") {
     closeContact();
+    closeStatusConfirmation();
     updateDetailAddress(null);
   }
   currentPage = page;
@@ -189,25 +269,26 @@ function showPage(page) {
     updateEventTimeLimit();
   }
   if (page === "home") renderItems(currentFilter);
+  if (page === "my-posts") renderMyPosts();
+  const myPostError = document.querySelector("#my-post-error");
+  myPostError.hidden = storageResult.ok;
+  myPostError.textContent = storageResult.ok ? "" : storageResult.reason === "corrupt"
+    ? "本地发布数据有损坏；仅显示可读取的本人记录，状态更新会在检查完成前暂停。原始数据未被覆盖。"
+    : "当前浏览器无法读取本地发布信息；请检查浏览器存储设置。";
   const visiblePage = page === "success" ? "success" : page;
   Object.entries(viewElements).forEach(([name, element]) => { element.hidden = name !== visiblePage; });
-  const onPublish = page === "publish" || page === "success";
-  const headerTitles = { home: ["拾光", "校园失物招领"], search: ["搜索物品", "找到校园里的线索"], publish: ["发布信息", "让线索留下，让物品回家"], success: ["发布成功", "让线索留下，让物品回家"], detail: ["物品详情", "让线索与失主相遇"] };
+  const navPage = page === "detail" ? detailReturn.page : page;
+  const onPublish = navPage === "publish" || navPage === "success";
+  const headerTitles = { home: ["拾光", "校园失物招领"], search: ["搜索物品", "找到校园里的线索"], publish: ["发布信息", "让线索留下，让物品回家"], success: ["发布成功", "让线索留下，让物品回家"], detail: ["物品详情", "让线索与失主相遇"], "my-posts": ["我的发布", "记录每一条线索，也记录每一次找回。"] };
   [headerTitle.textContent, headerSubtitle.textContent] = headerTitles[page];
   searchButton.hidden = page !== "home";
-  homeNav.classList.toggle("active", page === "home");
+  homeNav.classList.toggle("active", navPage === "home");
   publishNav.classList.toggle("active", onPublish);
-  if (page === "home") {
-    homeNav.setAttribute("aria-current", "page");
-    publishNav.removeAttribute("aria-current");
-  } else if (onPublish) {
-    publishNav.setAttribute("aria-current", "page");
-    homeNav.removeAttribute("aria-current");
-  } else {
-    homeNav.removeAttribute("aria-current");
-    publishNav.removeAttribute("aria-current");
-  }
-  const heading = { home: "#items-title", search: "#search-title", publish: "#publish-title", success: "#success-title", detail: "#detail-title" };
+  myPostsNav.classList.toggle("active", navPage === "my-posts");
+  [homeNav, publishNav, myPostsNav].forEach((link) => link.removeAttribute("aria-current"));
+  const activeNav = navPage === "success" ? publishNav : navPage === "home" ? homeNav : navPage === "publish" ? publishNav : navPage === "my-posts" ? myPostsNav : null;
+  if (activeNav) activeNav.setAttribute("aria-current", "page");
+  const heading = { home: "#items-title", search: "#search-title", publish: "#publish-title", success: "#success-title", detail: "#detail-title", "my-posts": "#my-posts-title" };
   document.querySelector(heading[page]).focus();
 }
 
@@ -275,6 +356,12 @@ function openItemDetails(id, restore = false) {
   };
   Object.entries(fields).forEach(([key, value]) => { document.querySelector(`#${key}`).textContent = value; });
   document.querySelector("#detail-status").classList.toggle("completed", ["recovered", "returned"].includes(record.status));
+  const statusFeedback = document.querySelector("#detail-status-feedback");
+  statusFeedback.hidden = true;
+  statusFeedback.textContent = "";
+  const mayUpdateStatus = Boolean(item && detailReturn.page === "my-posts" && window.ShiguangLogic.canCompleteItem(item, ownedItems()));
+  completeItemButton.hidden = !mayUpdateStatus;
+  completeItemButton.textContent = record.type === "lost" ? "标记为已找到" : "标记为已归还";
   if (!restore) updateDetailAddress(id);
   showPage("detail");
   if (!item) document.querySelector("#detail-missing-title").focus();
@@ -289,12 +376,117 @@ function returnFromDetails() {
     searchFeedback.textContent = "";
   }
   showPage(previous.page);
-  const list = previous.page === "search" ? searchResultList : document.querySelector("#item-list");
+  const list = previous.page === "search" ? searchResultList : previous.page === "my-posts" ? myPostList : document.querySelector("#item-list");
   const trigger = previous.page === "success" ? document.querySelector("#view-details")
     : Array.from(list.children).find((card) => card.dataset.itemId === previous.id);
   if (trigger) trigger.focus({ preventScroll: true });
   appContent.scrollTop = previous.scrollTop;
   window.scrollTo(0, previous.windowY);
+}
+
+function completeStatusError(reason) {
+  const messages = {
+    "invalid-id": "信息编号无效，请返回“我的发布”重新选择。",
+    "not-owned": "只能更新当前浏览器中由你发布的信息。",
+    "not-found": "本地记录已不存在，状态没有更改。",
+    "corrupt": "本地发布数据损坏，状态没有更改；原始数据未被覆盖。",
+    "unavailable": "当前浏览器无法写入本地存储，状态没有更改。",
+    quota: "浏览器本地存储空间不足，状态没有更改。",
+    "already-completed": "这条信息已经完成，不能再次修改。",
+    "invalid-status": "当前状态不允许完成操作。",
+    "invalid-transition": "该信息类型不允许切换到此状态。",
+    "invalid-type": "信息类型无效，状态没有更改。",
+    stale: "记录状态已变化，请返回列表刷新后重试。"
+  };
+  return messages[reason] || "状态更新失败，信息没有更改，请稍后重试。";
+}
+
+function openStatusConfirmation() {
+  if (currentPage !== "detail" || statusDialog.open || isStatusUpdating) return;
+  const item = window.ShiguangLogic.getItemById(allItems, detailItemId);
+  if (!item || !window.ShiguangLogic.canCompleteItem(item, ownedItems())) {
+    const feedback = document.querySelector("#detail-status-feedback");
+    feedback.textContent = completeStatusError(item ? window.ShiguangLogic.completeItem(item, ownedItems()).reason : "not-found");
+    feedback.hidden = false;
+    completeItemButton.hidden = true;
+    feedback.focus();
+    return;
+  }
+  const targetStatus = window.ShiguangLogic.getCompletedStatus(item);
+  document.querySelector("#status-confirm-title").textContent = item.type === "lost" ? "确认物品已找回？" : "确认物品已归还？";
+  document.querySelector("#status-confirm-description").textContent = item.type === "lost"
+    ? "确认后状态将变为“已找到”，无法撤回。"
+    : "确认后状态将变为“已归还”，无法撤回。";
+  document.querySelector("#status-confirm-error").textContent = "";
+  statusDialogError.hidden = true;
+  confirmStatusButton.dataset.nextStatus = targetStatus;
+  confirmStatusButton.disabled = false;
+  confirmStatusButton.textContent = "确认完成";
+  statusDialog.showModal();
+  document.body.classList.add("status-modal-open");
+  cancelStatusButton.focus();
+}
+
+function finishStatusConfirmation(restoreFocus = true) {
+  document.body.classList.remove("status-modal-open");
+  if (restoreFocus && !completeItemButton.hidden && currentPage === "detail") {
+    completeItemButton.focus({ preventScroll: true });
+  }
+}
+
+function closeStatusConfirmation(restoreFocus = true) {
+  if (isStatusUpdating) return;
+  if (statusDialog.open) statusDialog.close();
+  finishStatusConfirmation(restoreFocus);
+}
+
+function confirmStatusUpdate() {
+  if (isStatusUpdating || !statusDialog.open) return;
+  isStatusUpdating = true;
+  confirmStatusButton.disabled = true;
+  confirmStatusButton.textContent = "正在保存…";
+  confirmStatusButton.setAttribute("aria-busy", "true");
+  statusDialogError.hidden = true;
+
+  const item = window.ShiguangLogic.getItemById(allItems, detailItemId);
+  const completion = window.ShiguangLogic.completeItem(item, ownedItems());
+  if (!completion.ok) {
+    isStatusUpdating = false;
+    confirmStatusButton.disabled = false;
+    confirmStatusButton.textContent = "确认完成";
+    confirmStatusButton.setAttribute("aria-busy", "false");
+    statusDialogError.textContent = completeStatusError(completion.reason);
+    statusDialogError.hidden = false;
+    statusDialogError.focus();
+    return;
+  }
+
+  const saved = window.ShiguangStorage.updateItemStatus(item.id, confirmStatusButton.dataset.nextStatus);
+  if (!saved.ok) {
+    isStatusUpdating = false;
+    confirmStatusButton.disabled = false;
+    confirmStatusButton.textContent = "确认完成";
+    confirmStatusButton.setAttribute("aria-busy", "false");
+    statusDialogError.textContent = completeStatusError(saved.reason);
+    statusDialogError.hidden = false;
+    statusDialogError.focus();
+    return;
+  }
+
+  userItems = userItems.map((entry) => entry.id === saved.item.id ? saved.item : entry);
+  allItems = [...sampleItems, ...userItems];
+  renderItems(currentFilter);
+  renderCurrentSearchResults();
+  renderMyPosts();
+  isStatusUpdating = false;
+  confirmStatusButton.setAttribute("aria-busy", "false");
+  statusDialog.close();
+  finishStatusConfirmation(false);
+  openItemDetails(saved.item.id, true);
+  const feedback = document.querySelector("#detail-status-feedback");
+  feedback.textContent = `状态已更新为“${statusLabels[saved.item.status]}”。`;
+  feedback.hidden = false;
+  feedback.focus({ preventScroll: true });
 }
 
 function currentContact() {
@@ -536,8 +728,9 @@ function handlePublish(event) {
 
   setSubmitting(true);
   let item;
+  let ownerId;
   try {
-    const ownerId = window.ShiguangStorage.getOwnerId();
+    ownerId = window.ShiguangStorage.getOwnerId();
     let id = window.ShiguangStorage.createId("item");
     const existingIds = new Set(allItems.map((item) => item.id));
     for (let attempts = 0; existingIds.has(id) && attempts < 5; attempts += 1) id = window.ShiguangStorage.createId("item");
@@ -556,6 +749,7 @@ function handlePublish(event) {
     return;
   }
   // 保存成功后保持提交锁，直到用户主动开始下一次发布。
+  currentOwnerId = ownerId;
   form.setAttribute("aria-busy", "false");
   submitButton.textContent = "已发布";
   lastPublishedItem = item;
@@ -568,7 +762,7 @@ function handlePublish(event) {
 }
 
 tabs.forEach((button) => button.addEventListener("click", () => selectFilter(button)));
-[document.querySelector("#item-list"), searchResultList].forEach((list) => {
+[document.querySelector("#item-list"), searchResultList, myPostList].forEach((list) => {
   list.addEventListener("click", (event) => {
     const card = event.target.closest(".item-card");
     if (card) showItemFeedback(card);
@@ -583,6 +777,18 @@ tabs.forEach((button) => button.addEventListener("click", () => selectFilter(but
     showItemFeedback(card);
   });
 });
+myPostFilters.forEach((button) => {
+  button.addEventListener("click", () => selectMyPostFilter(button));
+  button.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const index = myPostFilters.indexOf(button);
+    const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? myPostFilters.length - 1
+      : (index + (event.key === "ArrowRight" ? 1 : myPostFilters.length - 1)) % myPostFilters.length;
+    myPostFilters[nextIndex].focus();
+    selectMyPostFilter(myPostFilters[nextIndex]);
+  });
+});
 modeButtons.forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode)));
 form.addEventListener("submit", handlePublish);
 eventTimeInput.addEventListener("focus", updateEventTimeLimit);
@@ -595,12 +801,7 @@ document.querySelectorAll(".nav-item").forEach((link) => link.addEventListener("
   if (link.dataset.page === "home") showPage("home");
   else if (link.dataset.page === "publish") {
     showPage("publish");
-  }
-  else {
-    formInfo.textContent = "我的发布管理将在后续阶段开放。";
-    formInfo.hidden = false;
-    showPage("publish");
-  }
+  } else if (link.dataset.page === "my-posts") showPage("my-posts");
 }));
 
 searchButton.addEventListener("click", () => {
@@ -665,6 +866,25 @@ document.querySelector("#view-details").addEventListener("click", () => {
 document.querySelector("#detail-back").addEventListener("click", returnFromDetails);
 document.querySelector("#detail-home").addEventListener("click", () => showPage("home"));
 contactButton.addEventListener("click", openContact);
+completeItemButton.addEventListener("click", openStatusConfirmation);
+confirmStatusButton.addEventListener("click", confirmStatusUpdate);
+cancelStatusButton.addEventListener("click", () => closeStatusConfirmation());
+document.querySelector("#close-status-confirm").addEventListener("click", () => closeStatusConfirmation());
+statusDialog.addEventListener("cancel", (event) => { event.preventDefault(); closeStatusConfirmation(); });
+statusDialog.addEventListener("close", () => finishStatusConfirmation());
+statusDialog.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !event.isComposing) {
+    event.preventDefault();
+    closeStatusConfirmation();
+  } else if (event.key === "Tab") {
+    const focusable = [document.querySelector("#close-status-confirm"), cancelStatusButton, ...(!confirmStatusButton.disabled ? [confirmStatusButton] : [])];
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (!focusable.includes(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); }
+    else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
+});
 copyButton.addEventListener("click", copyContact);
 selectContactButton.addEventListener("click", selectContactText);
 closeContactButton.addEventListener("click", closeContact);
