@@ -81,6 +81,11 @@ body {
 .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(36, 84, 71, .1); }
 .form-field input::placeholder, .form-field textarea::placeholder { color: #9aa59e; }
 .field-hint { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.field-error { color: #a33f32; font-size: 13px; line-height: 1.5; }
+.form-field [aria-invalid="true"] { border-color: #a33f32; }
+.app-content :focus { scroll-margin-block: 24px calc(110px + env(safe-area-inset-bottom)); }
+.form-message, .success-item-name, .card-title, .card-location { overflow-wrap: anywhere; }
+.card-title { min-width: 0; }
 .form-message { padding: 11px 13px; margin: 0; border-radius: 12px; font-size: 13px; line-height: 1.55; }
 .error-message { background: #fff0ed; color: #a33f32; }
 .info-message { background: var(--green-light); color: var(--green); }

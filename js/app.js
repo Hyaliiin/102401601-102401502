@@ -30,13 +30,22 @@ const eventTimeLabel = document.querySelector("#event-time-label");
 const locationInput = document.querySelector("#item-location");
 const eventTimeInput = document.querySelector("#event-time");
 const modeButtons = document.querySelectorAll(".mode-button");
+const fieldInputs = {
+  name: document.querySelector("#item-name"),
+  category: document.querySelector("#item-category"),
+  location: locationInput,
+  eventAt: eventTimeInput,
+  description: document.querySelector("#item-description"),
+  contact: document.querySelector("#item-contact")
+};
 const storageResult = window.ShiguangStorage.loadItems();
-let userItems = storageResult.ok ? storageResult.items : [];
+let userItems = storageResult.items;
 let allItems = [...sampleItems, ...userItems];
 let currentFilter = "lost";
 let currentMode = "lost";
 let isSubmitting = false;
 let lastPublishedItem = null;
+let hasValidationErrors = false;
 
 function textElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -121,6 +130,11 @@ function showItemFeedback(card) {
 }
 
 function showPage(page) {
+  if (page === "publish") {
+    if (isSubmitting && lastPublishedItem) resetForm();
+    updateEventTimeLimit();
+  }
+  if (page === "home") renderItems(currentFilter);
   const visiblePage = page === "success" ? "success" : page;
   Object.entries(viewElements).forEach(([name, element]) => { element.hidden = name !== visiblePage; });
   const onPublish = page === "publish" || page === "success";
@@ -136,7 +150,8 @@ function showPage(page) {
     publishNav.setAttribute("aria-current", "page");
     homeNav.removeAttribute("aria-current");
   }
-  if (page === "home") document.querySelector("#items-title").focus?.();
+  const heading = { home: "#items-title", publish: "#publish-title", success: "#success-title" };
+  document.querySelector(heading[page]).focus();
 }
 
 function setMode(mode) {
@@ -152,8 +167,13 @@ function setMode(mode) {
   locationInput.placeholder = lost ? "例如：图书馆二楼" : "例如：第一食堂门口";
   eventTimeInput.setAttribute("aria-label", lost ? "丢失时间" : "拾取时间");
   document.querySelector("#publish-title").textContent = lost ? "发布寻物信息" : "发布招领信息";
-  formError.hidden = true;
-  formError.textContent = "";
+  if (hasValidationErrors) showValidationErrors(window.ShiguangLogic.validate(formValues()).errors, false);
+}
+
+function updateEventTimeLimit() {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  eventTimeInput.max = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
 function formValues() {
@@ -168,21 +188,44 @@ function formValues() {
   };
 }
 
-function showValidationErrors(errors) {
+function showValidationErrors(errors, focusFirst = true) {
+  Object.entries(fieldInputs).forEach(([key, input]) => {
+    const message = document.querySelector(`#${input.id}-error`);
+    message.textContent = errors[key] || "";
+    message.hidden = !errors[key];
+    if (errors[key]) input.setAttribute("aria-invalid", "true");
+    else input.removeAttribute("aria-invalid");
+  });
+  hasValidationErrors = Object.keys(errors).length > 0;
   formError.textContent = Object.values(errors).join("；");
+  formError.hidden = !hasValidationErrors;
+  if (focusFirst && hasValidationErrors) (fieldInputs[Object.keys(errors)[0]] || formError).focus();
+}
+
+function setSubmitting(value) {
+  isSubmitting = value;
+  submitButton.disabled = value;
+  submitButton.textContent = value ? "正在保存…" : "发布信息";
+  form.setAttribute("aria-busy", String(value));
+}
+
+function showSaveError(reason) {
+  const messages = {
+    corrupt: "本地发布记录已损坏，暂时无法保存新信息。原数据未被覆盖，请先备份并检查浏览器本地数据；当前填写内容已保留。",
+    quota: "浏览器本地存储空间不足，信息未发布。请释放空间后重试，当前填写内容已保留。",
+    duplicate: "记录编号冲突，请重新提交，当前填写内容已保留。",
+    invalid: "发布记录格式不正确，信息未保存。当前填写内容已保留，请检查后重试。"
+  };
+  setSubmitting(false);
+  formError.textContent = messages[reason] || "当前浏览器无法访问本地存储，信息未发布。请检查浏览器设置后重试，当前填写内容已保留。";
   formError.hidden = false;
-  const firstInvalid = Object.keys(errors)[0];
-  const fieldMap = { name: "#item-name", category: "#item-category", location: "#item-location", eventAt: "#event-time", description: "#item-description", contact: "#item-contact" };
-  document.querySelector(fieldMap[firstInvalid])?.focus();
+  formError.focus();
 }
 
 function resetForm() {
   form.reset();
-  isSubmitting = false;
-  submitButton.disabled = false;
-  submitButton.textContent = "发布信息";
-  formError.hidden = true;
-  formError.textContent = "";
+  setSubmitting(false);
+  showValidationErrors({}, false);
   formInfo.hidden = true;
   formInfo.textContent = "";
   setMode("lost");
@@ -191,7 +234,8 @@ function resetForm() {
 function handlePublish(event) {
   event.preventDefault();
   if (isSubmitting) return;
-  formError.hidden = true;
+  showValidationErrors({}, false);
+  updateEventTimeLimit();
   const values = formValues();
   const validation = window.ShiguangLogic.validate(values);
   if (!validation.valid) {
@@ -199,38 +243,37 @@ function handlePublish(event) {
     return;
   }
 
-  isSubmitting = true;
-  submitButton.disabled = true;
-  submitButton.textContent = "正在保存…";
+  setSubmitting(true);
+  let item;
   try {
     const ownerId = window.ShiguangStorage.getOwnerId();
     let id = window.ShiguangStorage.createId("item");
     const existingIds = new Set(allItems.map((item) => item.id));
-    while (existingIds.has(id)) id = window.ShiguangStorage.createId("item");
-    const item = window.ShiguangLogic.createItem(values, ownerId, id, new Date().toISOString());
-    const result = window.ShiguangStorage.saveItem(item);
-    if (!result.ok) {
-      isSubmitting = false;
-      submitButton.disabled = false;
-      submitButton.textContent = "发布信息";
-      formError.textContent = result.reason === "duplicate" ? "记录编号冲突，请重新提交。" : "当前浏览器无法保存本地数据，请检查浏览器存储设置后重试。";
-      formError.hidden = false;
+    for (let attempts = 0; existingIds.has(id) && attempts < 5; attempts += 1) id = window.ShiguangStorage.createId("item");
+    if (existingIds.has(id)) {
+      showSaveError("duplicate");
       return;
     }
-    lastPublishedItem = item;
-    userItems = [...userItems, item];
-    allItems = [...sampleItems, ...userItems];
-    document.querySelector("#success-item-name").textContent = item.name;
-    document.querySelector("#success-status").textContent = statusLabels[item.status];
-    document.querySelector("#success-action-feedback").hidden = true;
-    showPage("success");
-  } catch (_) {
-    isSubmitting = false;
-    submitButton.disabled = false;
-    submitButton.textContent = "发布信息";
-    formError.textContent = "当前浏览器无法访问本地存储，信息未发布。请检查浏览器设置后重试。";
-    formError.hidden = false;
+    item = window.ShiguangLogic.createItem(values, ownerId, id, new Date().toISOString());
+    const result = window.ShiguangStorage.saveItem(item);
+    if (!result.ok) {
+      showSaveError(result.reason);
+      return;
+    }
+  } catch (error) {
+    showSaveError(error.name === "QuotaExceededError" ? "quota" : "unavailable");
+    return;
   }
+  // 保存成功后保持提交锁，直到用户主动开始下一次发布。
+  form.setAttribute("aria-busy", "false");
+  submitButton.textContent = "已发布";
+  lastPublishedItem = item;
+  userItems = [...userItems, item];
+  allItems = [...sampleItems, ...userItems];
+  document.querySelector("#success-item-name").textContent = item.name;
+  document.querySelector("#success-status").textContent = statusLabels[item.status];
+  document.querySelector("#success-action-feedback").hidden = true;
+  showPage("success");
 }
 
 tabs.forEach((button) => button.addEventListener("click", () => selectFilter(button)));
@@ -247,12 +290,15 @@ document.querySelector("#item-list").addEventListener("keydown", (event) => {
 });
 modeButtons.forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode)));
 form.addEventListener("submit", handlePublish);
+eventTimeInput.addEventListener("focus", updateEventTimeLimit);
+["input", "change"].forEach((eventName) => form.addEventListener(eventName, () => {
+  if (hasValidationErrors) showValidationErrors(window.ShiguangLogic.validate(formValues()).errors, false);
+}));
 
 document.querySelectorAll(".nav-item").forEach((link) => link.addEventListener("click", (event) => {
   event.preventDefault();
   if (link.dataset.page === "home") showPage("home");
   else if (link.dataset.page === "publish") {
-    if (!viewElements.success.hidden) resetForm();
     showPage("publish");
   }
   else {
@@ -282,7 +328,9 @@ document.querySelector("#return-home").addEventListener("click", () => {
 });
 
 if (!storageResult.ok) {
-  formInfo.textContent = "当前浏览器无法读取本地发布信息；示例内容仍可查看，但发布内容可能无法保存。";
+  formInfo.textContent = storageResult.reason === "corrupt"
+    ? "部分本地发布记录已损坏；可读取的记录和示例仍可查看。为保护原数据，暂时停止保存新信息，请先备份并检查本地数据。"
+    : "当前浏览器无法读取本地发布信息；示例内容仍可查看，但发布内容可能无法保存。";
   formInfo.hidden = false;
 }
 renderItems(currentFilter);
