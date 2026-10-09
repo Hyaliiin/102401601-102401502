@@ -36,6 +36,9 @@ const homeNav = document.querySelector('[data-page="home"]');
 const publishNav = document.querySelector('[data-page="publish"]');
 const myPostsNav = document.querySelector('[data-page="my-posts"]');
 const tabs = document.querySelectorAll(".filter-tab");
+const categoryFilter = document.querySelector("#home-category-filter");
+const locationFilter = document.querySelector("#home-location-filter");
+const clearLocationFilter = document.querySelector("#clear-location-filter");
 const myPostFilters = document.querySelectorAll(".my-post-filter");
 const myPostList = document.querySelector("#my-post-list");
 const myPostFilterCount = document.querySelector("#my-post-filter-count");
@@ -104,8 +107,17 @@ function textElement(tag, className, text) {
 }
 
 function visibleItems(filter) {
-  const selected = filter === "latest" ? [...allItems] : allItems.filter((item) => item.type === filter);
-  return selected.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+  return window.ShiguangLogic.filterItems(allItems, {
+    type: filter,
+    category: categoryFilter.value,
+    location: locationFilter.value
+  });
+}
+
+function updateHomeFilterControlStyles() {
+  categoryFilter.classList.toggle("has-value", Boolean(categoryFilter.value));
+  locationFilter.classList.toggle("has-value", Boolean(locationFilter.value.trim()));
+  clearLocationFilter.hidden = locationFilter.value.length === 0;
 }
 
 function formatPublishedAt(value) {
@@ -157,9 +169,25 @@ function renderItems(filter) {
   list.replaceChildren();
   if (!items.length) {
     const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.append(textElement("strong", "", `暂时没有${filterLabels[filter]}记录`));
-    empty.append(textElement("span", "", "有新的信息时，会第一时间出现在这里。"));
+    const hasRefinements = Boolean(categoryFilter.value || locationFilter.value.trim());
+    empty.className = `empty-state${hasRefinements ? " filtered-empty-state" : ""}`;
+    const icon = textElement("span", "empty-state-icon", hasRefinements ? "⌕" : "✦");
+    icon.setAttribute("aria-hidden", "true");
+    empty.append(icon);
+    empty.append(textElement("strong", "", hasRefinements ? "没有符合当前筛选条件的信息" : `暂时没有${filterLabels[filter]}记录`));
+    empty.append(textElement("span", "empty-state-hint", hasRefinements ? "调整类别或地点关键词，试试其他线索。" : "有新的信息时，会第一时间出现在这里。"));
+    if (hasRefinements) {
+      const clear = textElement("button", "secondary-button", "清除类别和地点筛选");
+      clear.type = "button";
+      clear.addEventListener("click", () => {
+        categoryFilter.value = "";
+        locationFilter.value = "";
+        updateHomeFilterControlStyles();
+        renderItems(currentFilter);
+        categoryFilter.focus();
+      });
+      empty.append(clear);
+    }
     list.append(empty);
     return;
   }
@@ -762,6 +790,24 @@ function handlePublish(event) {
 }
 
 tabs.forEach((button) => button.addEventListener("click", () => selectFilter(button)));
+categoryFilter.addEventListener("change", () => {
+  updateHomeFilterControlStyles();
+  renderItems(currentFilter);
+});
+locationFilter.addEventListener("input", () => {
+  updateHomeFilterControlStyles();
+  renderItems(currentFilter);
+});
+locationFilter.addEventListener("search", () => {
+  updateHomeFilterControlStyles();
+  renderItems(currentFilter);
+});
+clearLocationFilter.addEventListener("click", () => {
+  locationFilter.value = "";
+  updateHomeFilterControlStyles();
+  renderItems(currentFilter);
+  locationFilter.focus();
+});
 [document.querySelector("#item-list"), searchResultList, myPostList].forEach((list) => {
   list.addEventListener("click", (event) => {
     const card = event.target.closest(".item-card");
@@ -920,6 +966,7 @@ if (!storageResult.ok) {
     : "当前浏览器无法读取本地发布信息；示例内容仍可查看，但发布内容可能无法保存。";
   formInfo.hidden = false;
 }
+updateHomeFilterControlStyles();
 renderItems(currentFilter);
 setMode("lost");
 window.addEventListener("hashchange", () => restoreDetailAddress());

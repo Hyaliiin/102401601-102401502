@@ -29,6 +29,23 @@
           <button id="filter-found" class="filter-tab" type="button" role="tab" aria-selected="false" aria-controls="item-list" data-filter="found">招领信息</button>
           <button id="filter-latest" class="filter-tab" type="button" role="tab" aria-selected="false" aria-controls="item-list" data-filter="latest">按最新发布</button>
         </div>
+        <div class="home-refinements" aria-label="按类别和地点筛选">
+          <label class="home-filter-field" for="home-category-filter">
+            <span>物品类别</span>
+            <select id="home-category-filter" aria-controls="item-list">
+              <option value="">全部类别</option>
+              <option>校园卡</option><option>水杯</option><option>钥匙</option><option>雨伞</option>
+              <option>电子设备</option><option>书籍文具</option><option>其他</option>
+            </select>
+          </label>
+          <div class="home-filter-field">
+            <label for="home-location-filter">地点关键词</label>
+            <div class="home-location-input">
+              <input id="home-location-filter" type="search" autocomplete="off" aria-controls="item-list" placeholder="如图书馆、食堂">
+              <button id="clear-location-filter" type="button" aria-label="清除地点筛选" hidden>×</button>
+            </div>
+          </div>
+        </div>
         <div id="item-list" class="item-list" role="tabpanel" tabindex="0" aria-live="polite" aria-label="信息列表"></div>
         <p id="interaction-feedback" class="sr-only" aria-live="assertive"></p>
       </section>

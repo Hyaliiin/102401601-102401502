@@ -86,6 +86,34 @@
     });
   }
 
+  function filterItems(items, options = {}) {
+    if (!Array.isArray(items) || !options || typeof options !== "object" || Array.isArray(options)) return [];
+    const type = options.type;
+    if (!["lost", "found", "latest"].includes(type)) return [];
+    const category = typeof options.category === "string" ? options.category.trim() : "";
+    const location = typeof options.location === "string"
+      ? options.location.trim().replace(/\s+/g, " ").toLowerCase()
+      : "";
+    return items.filter((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+      if (type !== "latest" && item.type !== type) return false;
+      if (category && item.category !== category) return false;
+      if (location) {
+        const itemLocation = typeof item.location === "string"
+          ? item.location.trim().replace(/\s+/g, " ").toLowerCase()
+          : "";
+        if (!itemLocation.includes(location)) return false;
+      }
+      return true;
+    }).sort((left, right) => {
+      const leftTime = typeof left.publishedAt === "string" ? Date.parse(left.publishedAt) : Number.NEGATIVE_INFINITY;
+      const rightTime = typeof right.publishedAt === "string" ? Date.parse(right.publishedAt) : Number.NEGATIVE_INFINITY;
+      const safeLeftTime = Number.isFinite(leftTime) ? leftTime : Number.NEGATIVE_INFINITY;
+      const safeRightTime = Number.isFinite(rightTime) ? rightTime : Number.NEGATIVE_INFINITY;
+      return safeRightTime === safeLeftTime ? 0 : safeRightTime - safeLeftTime;
+    });
+  }
+
   function getItemById(items, id) {
     // ID 是不透明的字符串：不自动转换数字、不修剪后再比较。
     if (!Array.isArray(items) || typeof id !== "string" || !id.trim()) return null;
@@ -131,5 +159,5 @@
     return { ok: true, item: { ...check.owned, status: check.completedStatus } };
   }
 
-  global.ShiguangLogic = Object.freeze({ validate, createItem, searchItems, getItemById, getCompletedStatus, canCompleteItem, completeItem, searchKeywordLimit, categories, limits });
+  global.ShiguangLogic = Object.freeze({ validate, createItem, searchItems, filterItems, getItemById, getCompletedStatus, canCompleteItem, completeItem, searchKeywordLimit, categories, limits });
 })(window);
