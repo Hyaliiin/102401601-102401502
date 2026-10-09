@@ -70,6 +70,7 @@ const contactButton = document.querySelector("#view-contact");
 const contactDialog = document.querySelector("#contact-dialog");
 const contactValue = document.querySelector("#contact-value");
 const copyButton = document.querySelector("#copy-contact");
+const selectContactButton = document.querySelector("#select-contact");
 const closeContactButton = document.querySelector("#close-contact");
 const copyFeedback = document.querySelector("#copy-feedback");
 let contactSession = 0;
@@ -168,12 +169,13 @@ function showItemFeedback(card) {
   const feedback = card.parentElement === searchResultList
     ? searchFeedback
     : document.querySelector("#interaction-feedback");
+  // 在选择提示改变列表高度之前保存返回位置。
+  openItemDetails(item.id);
   const name = typeof item.name === "string" ? item.name : "未命名物品";
   feedback.textContent = `已选择“${name}”，已打开物品详情。`;
   if (feedback === searchFeedback) feedback.hidden = false;
   card.classList.add("is-selected");
   window.setTimeout(() => card.classList.remove("is-selected"), 700);
-  openItemDetails(item.id);
 }
 
 function showPage(page) {
@@ -231,6 +233,17 @@ function updateDetailAddress(id) {
   catch (_) { window.location.hash = hash; }
 }
 
+function restoreDetailAddress(initial = false) {
+  if (window.location.hash.startsWith("#item=")) {
+    let id = "";
+    try { id = decodeURIComponent(window.location.hash.slice(6)); } catch (_) { /* 无效地址显示空状态。 */ }
+    // replaceState 的降级路径也会触发 hashchange，避免重复打开和抢走焦点。
+    if (currentPage !== "detail" || detailItemId !== id) openItemDetails(id, initial);
+  } else if (currentPage === "detail") {
+    returnFromDetails();
+  }
+}
+
 function openItemDetails(id, restore = false) {
   if (currentPage !== "detail" && !restore) {
     detailReturn = { page: currentPage, id, scrollTop: appContent.scrollTop, windowY: window.scrollY };
@@ -264,12 +277,17 @@ function openItemDetails(id, restore = false) {
   document.querySelector("#detail-status").classList.toggle("completed", ["recovered", "returned"].includes(record.status));
   if (!restore) updateDetailAddress(id);
   showPage("detail");
+  if (!item) document.querySelector("#detail-missing-title").focus();
   appContent.scrollTop = 0;
   window.scrollTo(0, 0);
 }
 
 function returnFromDetails() {
   const previous = detailReturn;
+  if (previous.page === "search") {
+    searchFeedback.hidden = true;
+    searchFeedback.textContent = "";
+  }
   showPage(previous.page);
   const list = previous.page === "search" ? searchResultList : document.querySelector("#item-list");
   const trigger = previous.page === "success" ? document.querySelector("#view-details")
@@ -285,16 +303,21 @@ function currentContact() {
 }
 
 function openContact() {
-  if (currentPage !== "detail" || contactDialog.open) return;
+  const item = window.ShiguangLogic.getItemById(allItems, detailItemId);
+  if (currentPage !== "detail" || contactDialog.open || !item) return;
   const contact = currentContact();
   contactSession += 1;
   contactSessionActive = true;
   isCopying = false;
   contactValue.value = contact;
+  document.querySelector("#contact-item").textContent = `物品：${detailText(item.name, "未命名物品")}`;
+  contactDialog.setAttribute("aria-describedby", `contact-item contact-hint${contact ? "" : " contact-empty"}`);
   document.querySelector("#contact-type").textContent = /^(?:\+?86[- ]?)?1[3-9]\d{9}$/.test(contact) ? "手机号" : "微信号或其他联系方式";
   document.querySelector("#contact-field").hidden = !contact;
   document.querySelector("#contact-empty").hidden = Boolean(contact);
   copyButton.disabled = !contact;
+  copyButton.setAttribute("aria-busy", "false");
+  selectContactButton.hidden = !contact;
   copyButton.textContent = "一键复制";
   copyFeedback.textContent = "";
   // 原生模态 dialog 隔离背景的鼠标和键盘操作，且不依赖外部库。
@@ -309,6 +332,11 @@ function finishContactClose() {
   contactSession += 1; // 让关闭前尚未完成的复制请求失效。
   isCopying = false;
   contactValue.value = "";
+  document.querySelector("#contact-item").textContent = "";
+  copyButton.disabled = true;
+  copyButton.textContent = "一键复制";
+  copyButton.setAttribute("aria-busy", "false");
+  selectContactButton.hidden = true;
   copyFeedback.textContent = "";
   document.body.classList.remove("contact-modal-open");
   contactButton.focus({ preventScroll: true });
@@ -319,12 +347,22 @@ function closeContact() {
   finishContactClose();
 }
 
+function selectContactText() {
+  if (!contactDialog.open || !contactValue.value) return;
+  contactValue.focus();
+  contactValue.select();
+  copyFeedback.textContent = "已选中全部联系方式，请按 Ctrl+C（Mac 上按 Command+C），或长按、右键复制。";
+}
+
 async function copyContact() {
-  const contact = currentContact();
+  const contact = contactValue.value;
   if (!contactDialog.open || !contact || isCopying) return;
   const session = contactSession;
   isCopying = true;
+  // 禁用当前焦点按钮前先移动到只读文本，等待权限确认时仍可用键盘操作。
+  if (document.activeElement === copyButton) contactValue.focus();
   copyButton.disabled = true;
+  copyButton.setAttribute("aria-busy", "true");
   copyButton.textContent = "正在复制…";
   copyFeedback.textContent = "";
   try {
@@ -334,14 +372,14 @@ async function copyContact() {
     if (session === contactSession && contactDialog.open) copyFeedback.textContent = "复制成功";
   } catch (_) {
     if (session === contactSession && contactDialog.open) {
-      copyFeedback.textContent = "自动复制失败或浏览器不支持。已选中联系方式，请按 Ctrl+C（Mac 上按 Command+C），或右键复制。";
-      contactValue.focus();
-      contactValue.select();
+      selectContactText();
+      copyFeedback.textContent = `自动复制失败或浏览器不支持。${copyFeedback.textContent}`;
     }
   } finally {
     if (session === contactSession && contactDialog.open) {
       isCopying = false;
-      copyButton.disabled = !currentContact();
+      copyButton.disabled = !contactValue.value;
+      copyButton.setAttribute("aria-busy", "false");
       copyButton.textContent = "一键复制";
     }
   }
@@ -628,6 +666,7 @@ document.querySelector("#detail-back").addEventListener("click", returnFromDetai
 document.querySelector("#detail-home").addEventListener("click", () => showPage("home"));
 contactButton.addEventListener("click", openContact);
 copyButton.addEventListener("click", copyContact);
+selectContactButton.addEventListener("click", selectContactText);
 closeContactButton.addEventListener("click", closeContact);
 contactDialog.addEventListener("cancel", (event) => { event.preventDefault(); closeContact(); });
 contactDialog.addEventListener("close", () => { if (!contactDialog.open) finishContactClose(); });
@@ -636,10 +675,11 @@ contactDialog.addEventListener("keydown", (event) => {
     event.preventDefault();
     closeContact();
   } else if (event.key === "Tab") {
-    const focusable = [closeContactButton, ...(!contactValue.value ? [] : [contactValue]), ...(!copyButton.disabled ? [copyButton] : [])];
+    const focusable = [closeContactButton, ...(!contactValue.value ? [] : [contactValue, selectContactButton]), ...(!copyButton.disabled ? [copyButton] : [])];
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    if (!focusable.includes(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); }
+    else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 });
@@ -662,8 +702,5 @@ if (!storageResult.ok) {
 }
 renderItems(currentFilter);
 setMode("lost");
-if (window.location.hash.startsWith("#item=")) {
-  let id = "";
-  try { id = decodeURIComponent(window.location.hash.slice(6)); } catch (_) { /* 无效地址显示空状态。 */ }
-  openItemDetails(id, true);
-}
+window.addEventListener("hashchange", () => restoreDetailAddress());
+restoreDetailAddress(true);

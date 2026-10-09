@@ -424,3 +424,219 @@ test("详情标记含原生 dialog、只读文本和无障碍关联，脚本仍�
   assert.deepEqual(scripts, ["js/logic.js", "js/storage.js", "js/app.js"]);
   scripts.forEach((file) => assert.ok(fs.existsSync(path.join(root, file))));
 });
+
+function changeAddress(app, hash) {
+  app.context.window.location.hash = hash;
+  app.context.window.dispatchEvent({ type: "hashchange" });
+}
+
+test("从详情返回搜索移除过期选择提示，重复往返不累积提示或重建结果", () => {
+  const app = storedApp();
+  const { elements } = app;
+  elements["search-entry"].dispatch("click");
+  elements["search-keyword"].value = "水杯";
+  elements["search-form"].dispatch("submit");
+  const cards = elements["search-result-list"].children;
+  for (const id of ["user-a", "item-001", "user-a"]) {
+    clickCard(app, id, "search-result-list");
+    assert.equal(elements["search-feedback"].hidden, false);
+    elements["detail-back"].dispatch("click");
+    assert.equal(elements["search-feedback"].hidden, true);
+    assert.equal(elements["search-feedback"].textContent, "");
+    assert.equal(elements["search-result-list"].children, cards);
+    assert.equal(app.context.document.activeElement.dataset.itemId, id);
+  }
+});
+
+test("地址 ID 切换立即更新详情并关闭旧弹窗，联系方式不会串项", () => {
+  const app = storedApp([record(), record({ id: "user-b", name: "另一件物品", contact: "test-b" })]);
+  clickCard(app, "user-a");
+  openContact(app);
+  changeAddress(app, "#item=user-b");
+  assert.equal(app.elements["contact-dialog"].open, false);
+  assert.equal(app.elements["contact-value"].value, "");
+  assert.equal(app.elements["detail-name"].textContent, "另一件物品");
+  assert.equal(app.context.window.ShiguangApp.getSelectedItemId(), "user-b");
+  openContact(app);
+  assert.ok(app.elements["contact-value"].value === "test-b");
+  assert.equal(app.elements["contact-item"].textContent, "物品：另一件物品");
+});
+
+test("搜索页经地址进入详情及浏览器片段返回仍保留原结果、滚动与焦点", () => {
+  const app = storedApp();
+  const { elements, context } = app;
+  elements["search-entry"].dispatch("click");
+  elements["search-keyword"].value = "水杯";
+  elements["search-form"].dispatch("submit");
+  const cards = elements["search-result-list"].children;
+  const card = cards.find((item) => item.dataset.itemId === "user-a");
+  elements["app-content"].scrollTop = 180;
+  context.window.scrollY = 90;
+  changeAddress(app, "#item=user-a");
+  changeAddress(app, "#item=item-001");
+  changeAddress(app, "#home");
+  assert.equal(elements["search-view"].hidden, false);
+  assert.equal(elements["search-keyword"].value, "水杯");
+  assert.equal(elements["search-result-list"].children, cards);
+  assert.equal(elements["app-content"].scrollTop, 180);
+  assert.equal(context.window.scrollY, 90);
+  assert.equal(context.document.activeElement, card);
+});
+
+test("地址特殊 ID 切换后刷新仍对应原记录", () => {
+  const id = "详情/一?&%#";
+  const app = storedApp([record({ id })]);
+  changeAddress(app, `#item=${encodeURIComponent(id)}`);
+  const refreshed = createApp(app.sharedStorage, { hash: app.context.window.location.hash });
+  assert.equal(refreshed.context.window.ShiguangApp.getSelectedItemId(), id);
+  assert.equal(refreshed.elements["detail-name"].textContent, "用户的水杯");
+});
+
+test("相同地址通知不重新打开详情或关闭正在使用的弹窗", () => {
+  const app = storedApp();
+  clickCard(app, "user-a");
+  openContact(app);
+  changeAddress(app, "#item=user-a");
+  assert.equal(app.elements["contact-dialog"].open, true);
+  assert.equal(app.context.document.activeElement, app.elements["close-contact"]);
+});
+
+test("地址变为无效 ID 时聚焦友好说明，旧联系方式不可再次打开", () => {
+  for (const hash of ["#item=missing", "#item=%E0%A4%A", "#item="]) {
+    const app = storedApp();
+    clickCard(app, "user-a");
+    openContact(app);
+    changeAddress(app, hash);
+    assert.equal(app.elements["detail-missing"].hidden, false);
+    assert.equal(app.context.document.activeElement, app.elements["detail-missing-title"]);
+    assert.equal(app.elements["contact-value"].value, "");
+    openContact(app);
+    assert.equal(app.elements["contact-dialog"].open, false);
+    app.elements["detail-back"].dispatch("click");
+    assert.equal(app.elements["home-view"].hidden, false);
+  }
+});
+
+test("复制等待时焦点仍在弹窗且保留手动复制入口和忙碌状态", async () => {
+  let finish;
+  const app = storedApp([record()], { clipboard: { writeText() { return new Promise((resolve) => { finish = resolve; }); } } });
+  clickCard(app, "user-a");
+  openContact(app);
+  const { elements, context } = app;
+  elements["copy-contact"].focus();
+  const pending = elements["copy-contact"].handlers.click();
+  assert.equal(context.document.activeElement, elements["contact-value"]);
+  assert.equal(elements["copy-contact"].attributes["aria-busy"], "true");
+  elements["close-contact"].focus();
+  elements["contact-dialog"].dispatch("keydown", { key: "Tab", shiftKey: true });
+  assert.equal(context.document.activeElement, elements["select-contact"]);
+  elements["contact-dialog"].dispatch("keydown", { key: "Tab" });
+  assert.equal(context.document.activeElement, elements["close-contact"]);
+  finish();
+  await pending;
+  assert.equal(elements["copy-contact"].attributes["aria-busy"], "false");
+});
+
+test("焦点意外落在弹窗自身时 Tab 与 Shift+Tab 恢复到可用控件", () => {
+  const app = storedApp();
+  clickCard(app, "user-a");
+  openContact(app);
+  for (const shiftKey of [false, true]) {
+    app.elements["contact-dialog"].focus();
+    const event = app.elements["contact-dialog"].dispatch("keydown", { key: "Tab", shiftKey });
+    assert.ok(event.defaultPrevented);
+    assert.equal(app.context.document.activeElement, app.elements[shiftKey ? "copy-contact" : "close-contact"]);
+  }
+});
+
+test("手动复制可直接选择全部特殊字符且不会调用 API 或谎报成功", () => {
+  let writes = 0;
+  const contact = '<>&"\' 测试\n第二行';
+  const app = storedApp([record({ contact })], { clipboard: { async writeText() { writes += 1; } } });
+  clickCard(app, "user-a");
+  openContact(app);
+  app.elements["select-contact"].dispatch("click");
+  assert.equal(writes, 0);
+  assert.equal(app.context.document.activeElement, app.elements["contact-value"]);
+  assert.equal(app.elements["contact-value"].selectionStart, 0);
+  assert.equal(app.elements["contact-value"].selectionEnd, contact.length);
+  assert.match(app.elements["copy-feedback"].textContent, /已选中全部.*长按/);
+  assert.ok(!app.elements["copy-feedback"].textContent.includes("复制成功"));
+});
+
+test("空白或异常联系方式隐藏手动入口，弹窗描述包含空状态说明", () => {
+  for (const contact of [" \t　", null, 42, {}]) {
+    const app = storedApp();
+    app.context.window.ShiguangApp.getItemById("user-a").contact = contact;
+    clickCard(app, "user-a");
+    openContact(app);
+    assert.equal(app.elements["select-contact"].hidden, true);
+    assert.match(app.elements["contact-dialog"].attributes["aria-describedby"], /contact-empty/);
+    app.elements["select-contact"].dispatch("click");
+    assert.equal(app.elements["copy-feedback"].textContent, "");
+  }
+});
+
+test("旧复制请求失败不移动新弹窗焦点或解除新请求的忙碌状态", async () => {
+  const requests = [];
+  const app = storedApp([record()], { clipboard: { writeText() { return new Promise((resolve, reject) => requests.push({ resolve, reject })); } } });
+  clickCard(app, "user-a");
+  openContact(app);
+  const first = app.elements["copy-contact"].handlers.click();
+  closeContact(app);
+  openContact(app);
+  const second = app.elements["copy-contact"].handlers.click();
+  requests[0].reject(new Error("denied"));
+  await first;
+  assert.equal(app.context.document.activeElement, app.elements["close-contact"]);
+  assert.equal(app.elements["copy-contact"].disabled, true);
+  assert.equal(app.elements["copy-contact"].attributes["aria-busy"], "true");
+  assert.equal(app.elements["copy-feedback"].textContent, "");
+  requests[1].resolve();
+  await second;
+  assert.equal(app.elements["copy-feedback"].textContent, "复制成功");
+});
+
+test("关闭弹窗立即清除复制忙碌状态及物品标题，延迟回调不能复原", async () => {
+  let finish;
+  const app = storedApp([record()], { clipboard: { writeText() { return new Promise((resolve) => { finish = resolve; }); } } });
+  clickCard(app, "user-a");
+  openContact(app);
+  const pending = app.elements["copy-contact"].handlers.click();
+  closeContact(app);
+  assert.equal(app.elements["copy-contact"].attributes["aria-busy"], "false");
+  assert.equal(app.elements["copy-contact"].disabled, true);
+  assert.equal(app.elements["copy-contact"].textContent, "一键复制");
+  assert.equal(app.elements["contact-item"].textContent, "");
+  assert.equal(app.elements["select-contact"].hidden, true);
+  finish();
+  await pending;
+  assert.equal(app.elements["copy-feedback"].textContent, "");
+});
+
+test("复制使用当前弹窗展示的文本，避免读取过程中记录变化导致错拷", async () => {
+  let same = false;
+  const app = storedApp([record()], { clipboard: { async writeText(value) { same = value === app.elements["contact-value"].value; } } });
+  clickCard(app, "user-a");
+  openContact(app);
+  app.context.window.ShiguangApp.getItemById("user-a").contact = "changed-test-value";
+  await app.elements["copy-contact"].handlers.click();
+  assert.ok(same);
+  assert.equal(app.elements["copy-feedback"].textContent, "复制成功");
+});
+
+test("超长导入文本完整展示且不会改变本地数据，弹窗物品名按纯文本处理", () => {
+  const name = '<img src=x onerror="alert(1)">' + "物品".repeat(200);
+  const description = "长描述\n".repeat(300);
+  const contact = "test-only-".repeat(100);
+  const app = storedApp([record({ name, description, contact })]);
+  const before = app.sharedStorage.get(itemsKey);
+  clickCard(app, "user-a");
+  openContact(app);
+  app.elements["select-contact"].dispatch("click");
+  assert.equal(app.elements["detail-description"].textContent.length, description.length);
+  assert.equal(app.elements["contact-item"].textContent, `物品：${name}`);
+  assert.equal(app.elements["contact-item"].children.length, 0);
+  assert.equal(app.elements["contact-value"].selectionEnd, contact.length);
+  assert.equal(app.sharedStorage.get(itemsKey), before);
+});

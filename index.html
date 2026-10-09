@@ -82,12 +82,12 @@
       <section id="detail-view" class="detail-view" aria-labelledby="detail-title" hidden>
         <div class="search-page-heading">
           <button id="detail-back" class="back-button" type="button" aria-label="返回上一页">←</button>
-          <h2 id="detail-title" tabindex="-1">物品详情</h2>
+          <h2 id="detail-title" tabindex="-1" aria-describedby="detail-name detail-status">物品详情</h2>
         </div>
         <p id="detail-storage-warning" class="form-message error-message" role="status" hidden></p>
         <div id="detail-missing" class="empty-state" hidden>
-          <strong>暂时找不到这条信息</strong>
-          <p>物品编号可能无效，或本地记录已被清理、无法读取。请返回列表重新选择。</p>
+          <strong id="detail-missing-title" tabindex="-1" aria-describedby="detail-missing-hint">暂时找不到这条信息</strong>
+          <p id="detail-missing-hint">物品编号可能无效，或本地记录已被清理、无法读取。请返回列表重新选择。</p>
           <button id="detail-home" class="secondary-button" type="button">返回首页</button>
         </div>
         <article id="detail-content" class="detail-card" aria-labelledby="detail-name" hidden>
@@ -195,6 +195,7 @@
       <h2 id="contact-title">联系发布者</h2>
       <button id="close-contact" class="back-button" type="button" aria-label="关闭联系方式" autofocus>×</button>
     </div>
+    <p id="contact-item" class="contact-item"></p>
     <p id="contact-hint" class="field-hint">请仅用于联系物品归属；也可选中下方文本手动复制。</p>
     <div id="contact-field" class="form-field">
       <label id="contact-type" for="contact-value">微信号或手机号</label>
@@ -202,7 +203,8 @@
     </div>
     <p id="contact-empty" class="form-message info-message" hidden>发布者暂未提供联系方式，请返回列表查看其他线索。</p>
     <p id="copy-feedback" class="form-message info-message" role="status" aria-live="polite" aria-atomic="true"></p>
-    <button id="copy-contact" class="primary-button" type="button">一键复制</button>
+    <button id="select-contact" class="secondary-button" type="button" hidden>选中全部，手动复制</button>
+    <button id="copy-contact" class="primary-button" type="button" aria-busy="false">一键复制</button>
   </dialog>
 
   <script src="js/logic.js"></script>

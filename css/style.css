@@ -148,7 +148,7 @@ body {
 .detail-card { min-width: 0; padding: 20px; border: 1px solid var(--border); border-radius: 20px; background: var(--white); box-shadow: 0 6px 18px rgba(36, 84, 71, .05); overflow-wrap: anywhere; }
 .detail-card h3 { margin: 18px 0 8px; font-size: 23px; line-height: 1.5; }
 .detail-card h4 { margin: 20px 0 8px; font-size: 14px; }
-.detail-card .status-label { background: var(--green-light); color: var(--green); }
+.detail-card .status-label.completed { border: 1px solid #397448; }
 .detail-published { margin: 0; color: var(--muted); font-size: 12px; }
 .detail-icon { display: grid; place-items: center; min-height: 130px; margin: 20px 0; border-radius: 16px; background: var(--green-light); font-size: 60px; }
 .detail-fields { display: grid; gap: 16px; margin: 0; font-size: 14px; }
@@ -158,14 +158,16 @@ body {
 .detail-description { margin: 0; white-space: pre-wrap; font-size: 14px; line-height: 1.8; }
 .detail-contact-button { width: 100%; margin-top: 20px; }
 #detail-storage-warning { margin-bottom: 16px; }
-.contact-dialog { width: min(390px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 22px; border: 1px solid var(--border); border-radius: 22px; background: var(--cream); color: var(--text); overflow-y: auto; overflow-wrap: anywhere; box-shadow: 0 18px 60px rgba(32, 59, 53, .22); }
+.contact-dialog { width: min(390px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 22px; border: 1px solid var(--border); border-radius: 22px; background: var(--cream); color: var(--text); overflow-y: auto; overscroll-behavior: contain; overflow-wrap: anywhere; box-shadow: 0 18px 60px rgba(32, 59, 53, .22); }
 .contact-dialog::backdrop { background: rgba(20, 40, 33, .48); }
-.contact-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.contact-heading { position: sticky; top: -22px; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 8px; background: var(--cream); }
 .contact-heading h2 { margin: 0; font-size: 21px; }
-.contact-dialog .primary-button { width: 100%; margin-top: 12px; }
+.contact-heading .back-button { flex-shrink: 0; }
+.contact-item { font-size: 14px; line-height: 1.6; }
+.contact-dialog .primary-button, .contact-dialog .secondary-button { width: 100%; margin-top: 12px; }
 .contact-dialog .primary-button:disabled { cursor: default; }
 .contact-dialog .form-message { margin-top: 12px; }
-#contact-value { white-space: pre-wrap; overflow-wrap: anywhere; resize: vertical; }
+#contact-value { min-height: 96px; max-height: max(96px, 35dvh); font-size: 16px; white-space: pre-wrap; overflow-wrap: anywhere; resize: vertical; }
 #copy-feedback:empty { display: none; }
 .contact-modal-open, .contact-modal-open .app-content { overflow: hidden; }
 
