@@ -10,12 +10,13 @@
   <div class="app-shell">
     <header class="app-header">
       <div class="brand-row">
-        <div><h1>拾光</h1><p>校园失物招领</p></div>
+        <div><h1 id="header-title">拾光</h1><p id="header-subtitle">校园失物招领</p></div>
         <button class="icon-button" id="search-entry" type="button" aria-label="搜索信息">⌕</button>
       </div>
     </header>
 
     <main class="app-content">
+      <section id="home-view" aria-labelledby="welcome-title">
       <section class="hero-card" aria-labelledby="welcome-title">
         <p class="eyebrow">校园互助平台</p>
         <h2 id="welcome-title">让遗失有回应</h2>
@@ -31,24 +32,84 @@
         <div id="item-list" class="item-list" role="tabpanel" tabindex="0" aria-live="polite" aria-label="信息列表"></div>
         <p id="interaction-feedback" class="sr-only" aria-live="assertive"></p>
       </section>
+      </section>
+
+      <section id="publish-view" class="publish-view" aria-labelledby="publish-title" hidden>
+        <div class="section-heading publish-heading"><div><p class="eyebrow">校园互助</p><h2 id="publish-title">发布信息</h2></div></div>
+        <div class="mode-switch" role="group" aria-label="选择发布类型">
+          <button class="mode-button active" id="mode-lost" type="button" aria-pressed="true" data-mode="lost">发布寻物</button>
+          <button class="mode-button" id="mode-found" type="button" aria-pressed="false" data-mode="found">发布招领</button>
+        </div>
+        <form id="publish-form" class="publish-form" novalidate>
+          <div class="form-field">
+            <label for="item-name">物品名称 <span class="required-mark">*</span></label>
+            <input id="item-name" name="name" type="text" maxlength="50" autocomplete="off" placeholder="例如：蓝色水杯" required>
+          </div>
+          <div class="form-field">
+            <label for="item-category">物品类别 <span class="required-mark">*</span></label>
+            <select id="item-category" name="category" required>
+              <option value="">请选择物品类别</option>
+              <option>校园卡</option><option>水杯</option><option>钥匙</option><option>雨伞</option>
+              <option>电子设备</option><option>书籍文具</option><option>其他</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label id="location-label" for="item-location">丢失地点 <span class="required-mark">*</span></label>
+            <input id="item-location" name="location" type="text" maxlength="100" autocomplete="off" placeholder="例如：图书馆二楼" required>
+          </div>
+          <div class="form-field">
+            <label id="event-time-label" for="event-time">丢失时间 <span class="required-mark">*</span></label>
+            <input id="event-time" name="eventAt" type="datetime-local" required>
+          </div>
+          <div class="form-field">
+            <label for="item-description">物品描述 <span class="required-mark">*</span></label>
+            <textarea id="item-description" name="description" maxlength="500" rows="4" placeholder="描述物品特征、遗失或拾取经过等（最多500字）" required></textarea>
+            <span class="field-hint">最多 500 字</span>
+          </div>
+          <div class="form-field">
+            <label for="item-contact">联系方式 <span class="required-mark">*</span></label>
+            <input id="item-contact" name="contact" type="text" maxlength="80" autocomplete="off" placeholder="微信号或手机号" required>
+            <span class="field-hint">仅用于校园联系，请确认填写准确</span>
+          </div>
+          <p id="form-error" class="form-message error-message" role="alert" hidden></p>
+          <p id="form-info" class="form-message info-message" role="status" hidden></p>
+          <button id="submit-publish" class="primary-button" type="submit">发布信息</button>
+        </form>
+      </section>
+
+      <section id="success-view" class="success-view" aria-labelledby="success-title" hidden>
+        <div class="success-mark" aria-hidden="true">✓</div>
+        <p class="eyebrow">信息已保存到当前浏览器</p>
+        <h2 id="success-title">发布成功</h2>
+        <p class="success-item-name" id="success-item-name"></p>
+        <div class="success-status-card"><span>当前状态</span><strong id="success-status"></strong></div>
+        <p id="success-action-feedback" class="form-message info-message" role="status" hidden></p>
+        <div class="success-actions">
+          <button id="view-details" class="secondary-button" type="button">查看详情</button>
+          <button id="continue-publishing" class="primary-button" type="button">继续发布</button>
+          <button id="return-home" class="text-button" type="button">返回首页</button>
+        </div>
+      </section>
     </main>
 
     <nav class="bottom-nav" aria-label="主导航">
-      <a class="nav-item active" href="index.html" aria-current="page">
+      <a class="nav-item active" href="#home" data-page="home" aria-current="page">
         <span aria-hidden="true">⌂</span>
         <span>首页</span>
       </a>
-      <a class="nav-item" href="#publish" aria-label="发布（后续开发）">
+      <a class="nav-item" href="#publish" data-page="publish" aria-label="发布信息">
         <span aria-hidden="true">＋</span>
         <span>发布</span>
       </a>
-      <a class="nav-item" href="#my-posts" aria-label="我的发布（后续开发）">
+      <a class="nav-item" href="#my-posts" data-page="my-posts" aria-label="我的发布（后续开发）">
         <span aria-hidden="true">♡</span>
         <span>我的发布</span>
       </a>
     </nav>
   </div>
 
+  <script src="js/logic.js"></script>
+  <script src="js/storage.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
