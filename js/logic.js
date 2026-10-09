@@ -86,5 +86,12 @@
     });
   }
 
-  global.ShiguangLogic = Object.freeze({ validate, createItem, searchItems, searchKeywordLimit, categories, limits });
+  function getItemById(items, id) {
+    // ID 是不透明的字符串：不自动转换数字、不修剪后再比较。
+    if (!Array.isArray(items) || typeof id !== "string" || !id.trim()) return null;
+    return items.find((item) => item && typeof item === "object" && !Array.isArray(item) &&
+      typeof item.id === "string" && item.id === id) || null;
+  }
+
+  global.ShiguangLogic = Object.freeze({ validate, createItem, searchItems, getItemById, searchKeywordLimit, categories, limits });
 })(window);

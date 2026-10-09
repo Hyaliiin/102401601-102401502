@@ -15,7 +15,7 @@
       </div>
     </header>
 
-    <main class="app-content">
+    <main class="app-content" id="app-content">
       <section id="home-view" aria-labelledby="welcome-title">
       <section class="hero-card" aria-labelledby="welcome-title">
         <p class="eyebrow">校园互助平台</p>
@@ -77,6 +77,34 @@
             <button id="no-result-publish" class="primary-button" type="button">发布寻物</button>
           </div>
         </section>
+      </section>
+
+      <section id="detail-view" class="detail-view" aria-labelledby="detail-title" hidden>
+        <div class="search-page-heading">
+          <button id="detail-back" class="back-button" type="button" aria-label="返回上一页">←</button>
+          <h2 id="detail-title" tabindex="-1">物品详情</h2>
+        </div>
+        <p id="detail-storage-warning" class="form-message error-message" role="status" hidden></p>
+        <div id="detail-missing" class="empty-state" hidden>
+          <strong>暂时找不到这条信息</strong>
+          <p>物品编号可能无效，或本地记录已被清理、无法读取。请返回列表重新选择。</p>
+          <button id="detail-home" class="secondary-button" type="button">返回首页</button>
+        </div>
+        <article id="detail-content" class="detail-card" aria-labelledby="detail-name" hidden>
+          <div class="card-top"><span id="detail-type" class="type-label"></span><span id="detail-status" class="status-label"></span></div>
+          <h3 id="detail-name"></h3>
+          <p id="detail-published" class="detail-published"></p>
+          <div id="detail-icon" class="detail-icon" aria-hidden="true"></div>
+          <dl class="detail-fields">
+            <div><dt>物品类别</dt><dd id="detail-category"></dd></div>
+            <div><dt id="detail-location-label">地点</dt><dd id="detail-location"></dd></div>
+            <div><dt id="detail-time-label">时间</dt><dd id="detail-time"></dd></div>
+          </dl>
+          <h4>物品描述</h4>
+          <p id="detail-description" class="detail-description"></p>
+        </article>
+        <button id="view-contact" class="primary-button detail-contact-button" type="button" aria-haspopup="dialog" aria-controls="contact-dialog" hidden>查看联系方式</button>
+        <p class="field-hint">本页面仅展示当前浏览器的本地记录，不支持跨设备共享。</p>
       </section>
 
       <section id="publish-view" class="publish-view" aria-labelledby="publish-title" hidden>
@@ -161,6 +189,21 @@
       </a>
     </nav>
   </div>
+
+  <dialog id="contact-dialog" class="contact-dialog" aria-labelledby="contact-title" aria-describedby="contact-hint" aria-modal="true">
+    <div class="contact-heading">
+      <h2 id="contact-title">联系发布者</h2>
+      <button id="close-contact" class="back-button" type="button" aria-label="关闭联系方式" autofocus>×</button>
+    </div>
+    <p id="contact-hint" class="field-hint">请仅用于联系物品归属；也可选中下方文本手动复制。</p>
+    <div id="contact-field" class="form-field">
+      <label id="contact-type" for="contact-value">微信号或手机号</label>
+      <textarea id="contact-value" rows="3" readonly aria-describedby="contact-hint" spellcheck="false"></textarea>
+    </div>
+    <p id="contact-empty" class="form-message info-message" hidden>发布者暂未提供联系方式，请返回列表查看其他线索。</p>
+    <p id="copy-feedback" class="form-message info-message" role="status" aria-live="polite" aria-atomic="true"></p>
+    <button id="copy-contact" class="primary-button" type="button">一键复制</button>
+  </dialog>
 
   <script src="js/logic.js"></script>
   <script src="js/storage.js"></script>

@@ -14,7 +14,8 @@ const viewElements = {
   home: document.querySelector("#home-view"),
   search: document.querySelector("#search-view"),
   publish: document.querySelector("#publish-view"),
-  success: document.querySelector("#success-view")
+  success: document.querySelector("#success-view"),
+  detail: document.querySelector("#detail-view")
 };
 const headerTitle = document.querySelector("#header-title");
 const headerSubtitle = document.querySelector("#header-subtitle");
@@ -61,8 +62,24 @@ let hasValidationErrors = false;
 let selectedItemId = null;
 let isSearchComposing = false;
 let previousSearchValue = "";
+let currentPage = "home";
+let detailItemId = null;
+let detailReturn = { page: "home", id: null, scrollTop: 0, windowY: 0 };
+const appContent = document.querySelector("#app-content");
+const contactButton = document.querySelector("#view-contact");
+const contactDialog = document.querySelector("#contact-dialog");
+const contactValue = document.querySelector("#contact-value");
+const copyButton = document.querySelector("#copy-contact");
+const closeContactButton = document.querySelector("#close-contact");
+const copyFeedback = document.querySelector("#copy-feedback");
+let contactSession = 0;
+let contactSessionActive = false;
+let isCopying = false;
 
-window.ShiguangApp = Object.freeze({ getSelectedItemId: () => selectedItemId });
+window.ShiguangApp = Object.freeze({
+  getSelectedItemId: () => selectedItemId,
+  getItemById: (id) => window.ShiguangLogic.getItemById(allItems, id)
+});
 
 function textElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -145,20 +162,26 @@ function selectFilter(button) {
 }
 
 function showItemFeedback(card) {
-  const item = allItems.find((entry) => entry.id === card.dataset.itemId);
+  const item = window.ShiguangLogic.getItemById(allItems, card.dataset.itemId);
   if (!item) return;
   selectedItemId = item.id;
-  const feedback = viewElements.search.hidden
-    ? document.querySelector("#interaction-feedback")
-    : document.querySelector("#search-feedback");
+  const feedback = card.parentElement === searchResultList
+    ? searchFeedback
+    : document.querySelector("#interaction-feedback");
   const name = typeof item.name === "string" ? item.name : "未命名物品";
-  feedback.textContent = `已选择“${name}”，详情页面将在后续阶段开放。`;
+  feedback.textContent = `已选择“${name}”，已打开物品详情。`;
   if (feedback === searchFeedback) feedback.hidden = false;
   card.classList.add("is-selected");
   window.setTimeout(() => card.classList.remove("is-selected"), 700);
+  openItemDetails(item.id);
 }
 
 function showPage(page) {
+  if (currentPage === "detail" && page !== "detail") {
+    closeContact();
+    updateDetailAddress(null);
+  }
+  currentPage = page;
   if (page === "publish") {
     if (isSubmitting && lastPublishedItem) resetForm();
     updateEventTimeLimit();
@@ -167,7 +190,7 @@ function showPage(page) {
   const visiblePage = page === "success" ? "success" : page;
   Object.entries(viewElements).forEach(([name, element]) => { element.hidden = name !== visiblePage; });
   const onPublish = page === "publish" || page === "success";
-  const headerTitles = { home: ["拾光", "校园失物招领"], search: ["搜索物品", "找到校园里的线索"], publish: ["发布信息", "让线索留下，让物品回家"], success: ["发布成功", "让线索留下，让物品回家"] };
+  const headerTitles = { home: ["拾光", "校园失物招领"], search: ["搜索物品", "找到校园里的线索"], publish: ["发布信息", "让线索留下，让物品回家"], success: ["发布成功", "让线索留下，让物品回家"], detail: ["物品详情", "让线索与失主相遇"] };
   [headerTitle.textContent, headerSubtitle.textContent] = headerTitles[page];
   searchButton.hidden = page !== "home";
   homeNav.classList.toggle("active", page === "home");
@@ -182,8 +205,146 @@ function showPage(page) {
     homeNav.removeAttribute("aria-current");
     publishNav.removeAttribute("aria-current");
   }
-  const heading = { home: "#items-title", search: "#search-title", publish: "#publish-title", success: "#success-title" };
+  const heading = { home: "#items-title", search: "#search-title", publish: "#publish-title", success: "#success-title", detail: "#detail-title" };
   document.querySelector(heading[page]).focus();
+}
+
+function detailText(value, fallback) {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function formatDetailTime(value) {
+  if (typeof value !== "string" || !value.trim()) return "时间未提供";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "时间未知";
+  return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function updateDetailAddress(id) {
+  // 只在地址片段中保存 ID；不写入联系方式，也不改变已有存储结构。
+  let hash = "#home";
+  if (id !== null) {
+    try { hash = `#item=${encodeURIComponent(id)}`; }
+    catch (_) { hash = "#item="; }
+  }
+  try { window.history.replaceState(null, "", hash); }
+  catch (_) { window.location.hash = hash; }
+}
+
+function openItemDetails(id, restore = false) {
+  if (currentPage !== "detail" && !restore) {
+    detailReturn = { page: currentPage, id, scrollTop: appContent.scrollTop, windowY: window.scrollY };
+  }
+  closeContact();
+  detailItemId = id;
+  const item = window.ShiguangLogic.getItemById(allItems, id);
+  selectedItemId = item ? item.id : null;
+  document.querySelector("#detail-content").hidden = !item;
+  document.querySelector("#detail-missing").hidden = Boolean(item);
+  contactButton.hidden = !item;
+  const warning = document.querySelector("#detail-storage-warning");
+  warning.hidden = storageResult.ok;
+  warning.textContent = storageResult.ok ? "" : "部分本地记录损坏或无法读取，可能无法显示对应详情。原始数据未被覆盖；可读取的信息仍可查看。";
+  // 即使记录无效也清除旧详情，避免残留上一件物品的信息。
+  const record = item || {};
+  const fields = {
+    "detail-name": detailText(record.name, "未命名物品"),
+    "detail-type": lookupLabel(typeLabels, record.type, "信息类型未知"),
+    "detail-status": lookupLabel(statusLabels, record.status, "状态未知"),
+    "detail-published": `发布于 ${formatDetailTime(record.publishedAt)}`,
+    "detail-icon": lookupLabel(itemIcons, record.category, itemIcons["其他"]),
+    "detail-category": detailText(record.category, "类别未提供"),
+    "detail-location-label": record.type === "lost" ? "丢失地点" : record.type === "found" ? "拾取地点" : "地点",
+    "detail-location": detailText(record.location, "地点未提供"),
+    "detail-time-label": record.type === "lost" ? "丢失时间" : record.type === "found" ? "拾取时间" : "时间",
+    "detail-time": formatDetailTime(record.eventAt),
+    "detail-description": detailText(record.description, "暂无物品描述。")
+  };
+  Object.entries(fields).forEach(([key, value]) => { document.querySelector(`#${key}`).textContent = value; });
+  document.querySelector("#detail-status").classList.toggle("completed", ["recovered", "returned"].includes(record.status));
+  if (!restore) updateDetailAddress(id);
+  showPage("detail");
+  appContent.scrollTop = 0;
+  window.scrollTo(0, 0);
+}
+
+function returnFromDetails() {
+  const previous = detailReturn;
+  showPage(previous.page);
+  const list = previous.page === "search" ? searchResultList : document.querySelector("#item-list");
+  const trigger = previous.page === "success" ? document.querySelector("#view-details")
+    : Array.from(list.children).find((card) => card.dataset.itemId === previous.id);
+  if (trigger) trigger.focus({ preventScroll: true });
+  appContent.scrollTop = previous.scrollTop;
+  window.scrollTo(0, previous.windowY);
+}
+
+function currentContact() {
+  const item = window.ShiguangLogic.getItemById(allItems, detailItemId);
+  return typeof item?.contact === "string" ? item.contact.trim() : "";
+}
+
+function openContact() {
+  if (currentPage !== "detail" || contactDialog.open) return;
+  const contact = currentContact();
+  contactSession += 1;
+  contactSessionActive = true;
+  isCopying = false;
+  contactValue.value = contact;
+  document.querySelector("#contact-type").textContent = /^(?:\+?86[- ]?)?1[3-9]\d{9}$/.test(contact) ? "手机号" : "微信号或其他联系方式";
+  document.querySelector("#contact-field").hidden = !contact;
+  document.querySelector("#contact-empty").hidden = Boolean(contact);
+  copyButton.disabled = !contact;
+  copyButton.textContent = "一键复制";
+  copyFeedback.textContent = "";
+  // 原生模态 dialog 隔离背景的鼠标和键盘操作，且不依赖外部库。
+  contactDialog.showModal();
+  document.body.classList.add("contact-modal-open");
+  closeContactButton.focus();
+}
+
+function finishContactClose() {
+  if (!contactSessionActive) return;
+  contactSessionActive = false;
+  contactSession += 1; // 让关闭前尚未完成的复制请求失效。
+  isCopying = false;
+  contactValue.value = "";
+  copyFeedback.textContent = "";
+  document.body.classList.remove("contact-modal-open");
+  contactButton.focus({ preventScroll: true });
+}
+
+function closeContact() {
+  if (contactDialog.open) contactDialog.close();
+  finishContactClose();
+}
+
+async function copyContact() {
+  const contact = currentContact();
+  if (!contactDialog.open || !contact || isCopying) return;
+  const session = contactSession;
+  isCopying = true;
+  copyButton.disabled = true;
+  copyButton.textContent = "正在复制…";
+  copyFeedback.textContent = "";
+  try {
+    const clipboard = window.navigator.clipboard;
+    if (!clipboard || typeof clipboard.writeText !== "function") throw new Error("clipboard-unavailable");
+    await clipboard.writeText(contact);
+    if (session === contactSession && contactDialog.open) copyFeedback.textContent = "复制成功";
+  } catch (_) {
+    if (session === contactSession && contactDialog.open) {
+      copyFeedback.textContent = "自动复制失败或浏览器不支持。已选中联系方式，请按 Ctrl+C（Mac 上按 Command+C），或右键复制。";
+      contactValue.focus();
+      contactValue.select();
+    }
+  } finally {
+    if (session === contactSession && contactDialog.open) {
+      isCopying = false;
+      copyButton.disabled = !currentContact();
+      copyButton.textContent = "一键复制";
+    }
+  }
 }
 
 function showSearchInputState() {
@@ -461,9 +622,26 @@ document.querySelector("#no-result-publish").addEventListener("click", () => {
   fieldInputs.name.focus();
 });
 document.querySelector("#view-details").addEventListener("click", () => {
-  const feedback = document.querySelector("#success-action-feedback");
-  feedback.textContent = lastPublishedItem ? "详情页面将在后续阶段开放；这条信息已保存，可在首页信息列表中查看。" : "暂时没有可查看的信息。";
-  feedback.hidden = false;
+  openItemDetails(lastPublishedItem?.id || "");
+});
+document.querySelector("#detail-back").addEventListener("click", returnFromDetails);
+document.querySelector("#detail-home").addEventListener("click", () => showPage("home"));
+contactButton.addEventListener("click", openContact);
+copyButton.addEventListener("click", copyContact);
+closeContactButton.addEventListener("click", closeContact);
+contactDialog.addEventListener("cancel", (event) => { event.preventDefault(); closeContact(); });
+contactDialog.addEventListener("close", () => { if (!contactDialog.open) finishContactClose(); });
+contactDialog.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !event.isComposing) {
+    event.preventDefault();
+    closeContact();
+  } else if (event.key === "Tab") {
+    const focusable = [closeContactButton, ...(!contactValue.value ? [] : [contactValue]), ...(!copyButton.disabled ? [copyButton] : [])];
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
 });
 document.querySelector("#continue-publishing").addEventListener("click", () => {
   resetForm();
@@ -484,3 +662,8 @@ if (!storageResult.ok) {
 }
 renderItems(currentFilter);
 setMode("lost");
+if (window.location.hash.startsWith("#item=")) {
+  let id = "";
+  try { id = decodeURIComponent(window.location.hash.slice(6)); } catch (_) { /* 无效地址显示空状态。 */ }
+  openItemDetails(id, true);
+}
