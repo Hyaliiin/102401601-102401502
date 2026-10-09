@@ -97,6 +97,9 @@ function createApp(sharedStorage = new Map(), options = {}) {
   };
   const location = { hash: options.hash || "" };
   const window = {
+    handlers: {},
+    addEventListener(type, handler) { this.handlers[type] = handler; },
+    dispatchEvent(event) { this.handlers[event.type]?.(event); },
     localStorage: options.localStorage || localStorage, setTimeout() {},
     location, navigator: { clipboard: options.clipboard },
     history: { replaceState(_state, _title, hash) { location.hash = hash; } },
