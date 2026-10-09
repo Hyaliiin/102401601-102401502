@@ -73,6 +73,12 @@ function createApp(sharedStorage = new Map(), options = {}) {
   const quickKeywords = ["水杯", "钥匙", "笔记本"].map((keyword) => new Element({ keyword }));
   const modes = ["lost", "found"].map((mode) => new Element({ mode }));
   const myPostFilters = ["all", "active", "completed"].map((myFilter) => new Element({ myFilter }));
+  const myPostFilterNodeList = Object.assign(Object.fromEntries(myPostFilters.map((element, index) => [index, element])), {
+    get length() { return myPostFilters.length; },
+    forEach(callback) { myPostFilters.forEach((element, index) => callback(element, index, this)); },
+    item(index) { return myPostFilters[index] || null; },
+    [Symbol.iterator]() { return myPostFilters[Symbol.iterator](); }
+  });
   const nav = ["home", "publish", "my-posts"].map((page) => new Element({ page }));
   const document = {
     body: new Element(),
@@ -88,7 +94,7 @@ function createApp(sharedStorage = new Map(), options = {}) {
       if (selector === ".filter-tab") return filters;
       if (selector === ".quick-keyword") return quickKeywords;
       if (selector === ".mode-button") return modes;
-      if (selector === ".my-post-filter") return myPostFilters;
+      if (selector === ".my-post-filter") return options.nativeMyPostNodeList ? myPostFilterNodeList : myPostFilters;
       if (selector === ".nav-item") return nav;
       return [];
     },

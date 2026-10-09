@@ -782,7 +782,7 @@ myPostFilters.forEach((button) => {
   button.addEventListener("keydown", (event) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
-    const index = myPostFilters.indexOf(button);
+    const index = Array.prototype.indexOf.call(myPostFilters, button);
     const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? myPostFilters.length - 1
       : (index + (event.key === "ArrowRight" ? 1 : myPostFilters.length - 1)) % myPostFilters.length;
     myPostFilters[nextIndex].focus();
