@@ -236,6 +236,19 @@ test("我的发布筛选支持方向键、Home、End并更新选中无障碍状�
   assert.equal(app.myPostFilters[0].attributes["aria-selected"], "true");
 });
 
+test("我的发布筛选键盘导航兼容原生 NodeList（不依赖数组 indexOf）", () => {
+  const app = createApp(new Map([[itemsKey, JSON.stringify([item()])], [ownerKey, "local-owner"]]), { nativeMyPostNodeList: true });
+  myPosts(app);
+  app.myPostFilters[0].dispatch("keydown", { key: "ArrowRight" });
+  assert.equal(app.myPostFilters[1].attributes["aria-selected"], "true");
+  assert.equal(app.context.document.activeElement, app.myPostFilters[1]);
+  app.myPostFilters[1].dispatch("keydown", { key: "End" });
+  assert.equal(app.myPostFilters[2].attributes["aria-selected"], "true");
+  assert.equal(app.context.document.activeElement, app.myPostFilters[2]);
+  app.myPostFilters[2].dispatch("keydown", { key: "Home" });
+  assert.equal(app.myPostFilters[0].attributes["aria-selected"], "true");
+});
+
 test("详情状态更新入口只在我的发布记录详情出现", () => {
   const app = storedApp();
   const homeCard = app.elements["item-list"].children.find((card) => card.dataset.itemId === "own-lost");
@@ -417,4 +430,33 @@ test("发布成功的新记录归入本人列表，并在刷新后继续显示",
   myPosts(refreshed);
   assert.equal(refreshed.elements["my-post-count"].textContent, "1");
   assert.equal(refreshed.elements["my-post-list"].children[0].dataset.itemId, id);
+});
+
+test("首次发布时创建的本地发布者 ID 在当前会话立即用于我的发布", () => {
+  const app = createApp(new Map(), { ownerId: null });
+  assert.equal(app.context.window.ShiguangStorage.loadOwnerId(), null);
+  app.nav[1].dispatch("click");
+  fillRequiredForm(app.elements, "lost", "首次发布的水杯");
+  app.elements["publish-form"].dispatch("submit");
+  const saved = JSON.parse(app.sharedStorage.get(itemsKey))[0];
+  assert.ok(saved.ownerId);
+  myPosts(app);
+  assert.equal(app.elements["my-post-count"].textContent, "1");
+  assert.equal(app.elements["my-post-list"].children[0].dataset.itemId, saved.id);
+});
+
+test("损坏或占用保留值的发布者 ID 会安全生成新 ID，避免记录漏出现在本人列表", () => {
+  for (const invalidOwnerId of ["demo", " \t "]) {
+    const app = createApp(new Map(), { ownerId: invalidOwnerId });
+    assert.equal(app.context.window.ShiguangStorage.loadOwnerId(), null);
+    app.nav[1].dispatch("click");
+    fillRequiredForm(app.elements, "found", `修复标识测试 ${invalidOwnerId.length}`);
+    app.elements["publish-form"].dispatch("submit");
+    const saved = JSON.parse(app.sharedStorage.get(itemsKey))[0];
+    assert.notEqual(saved.ownerId, "demo");
+    assert.ok(saved.ownerId.trim());
+    myPosts(app);
+    assert.equal(app.elements["my-post-count"].textContent, "1");
+    assert.equal(app.elements["my-post-list"].children[0].dataset.itemId, saved.id);
+  }
 });

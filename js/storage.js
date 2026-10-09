@@ -4,6 +4,10 @@
   const ITEMS_KEY = "shiguang.items.v1";
   const OWNER_KEY = "shiguang.owner.v1";
 
+  function isOwnerId(value) {
+    return typeof value === "string" && Boolean(value.trim()) && value.trim() !== "demo";
+  }
+
   function createId(prefix) {
     if (global.crypto && typeof global.crypto.randomUUID === "function") return `${prefix}-${global.crypto.randomUUID()}`;
     return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
@@ -42,7 +46,8 @@
 
   function getOwnerId() {
     const existing = global.localStorage.getItem(OWNER_KEY);
-    if (existing) return existing;
+    // “demo” 是示例记录保留标识，不能作为本地发布者 ID。
+    if (isOwnerId(existing)) return existing;
     const ownerId = createId("owner");
     global.localStorage.setItem(OWNER_KEY, ownerId);
     return ownerId;
@@ -51,7 +56,7 @@
   function loadOwnerId() {
     try {
       const ownerId = global.localStorage.getItem(OWNER_KEY);
-      return typeof ownerId === "string" && ownerId.trim() ? ownerId : null;
+      return isOwnerId(ownerId) ? ownerId : null;
     } catch (_) {
       return null;
     }
