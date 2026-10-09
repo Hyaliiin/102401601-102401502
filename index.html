@@ -9,15 +9,26 @@
 <body>
   <div class="app-shell">
     <header class="app-header">
-      <h1>拾光</h1>
-      <p>校园失物招领</p>
+      <div class="brand-row">
+        <div><h1>拾光</h1><p>校园失物招领</p></div>
+        <button class="icon-button" id="search-entry" type="button" aria-label="搜索信息">⌕</button>
+      </div>
     </header>
 
     <main class="app-content">
-      <section class="welcome-card" aria-labelledby="welcome-title">
+      <section class="hero-card" aria-labelledby="welcome-title">
         <p class="eyebrow">校园互助平台</p>
-        <h2 id="welcome-title">让每件物品都找到回家的路</h2>
-        <p>这里将展示寻物与招领信息。</p>
+        <h2 id="welcome-title">让遗失有回应</h2>
+        <p>把线索留下，让物品回家。</p>
+      </section>
+      <section class="items-section" aria-labelledby="items-title">
+        <div class="section-heading"><h2 id="items-title">校园信息</h2><span id="result-count" class="result-count"></span></div>
+        <div class="filter-tabs" role="tablist" aria-label="信息筛选">
+          <button class="filter-tab active" type="button" role="tab" aria-selected="true" data-filter="lost">寻物信息</button>
+          <button class="filter-tab" type="button" role="tab" aria-selected="false" data-filter="found">招领信息</button>
+          <button class="filter-tab" type="button" role="tab" aria-selected="false" data-filter="latest">按最新发布</button>
+        </div>
+        <div id="item-list" class="item-list" aria-live="polite"></div>
       </section>
     </main>
 
