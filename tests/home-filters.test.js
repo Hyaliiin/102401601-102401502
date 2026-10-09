@@ -142,6 +142,32 @@ test("地点输入使用键盘可访问的原生控件并响应输入及类别 c
   assert.equal(app.context.document.activeElement, location);
 });
 
+test("首页筛选标签支持左右方向键、Home、End和单一Tab焦点", () => {
+  const app = appWith([item()]);
+  app.filters[0].focus();
+  let event = app.filters[0].dispatch("keydown", { key: "ArrowRight" });
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(app.context.document.activeElement, app.filters[1]);
+  assert.equal(app.filters[1].attributes["tabindex"], "0");
+  assert.equal(app.filters[0].attributes["tabindex"], "-1");
+  app.filters[1].dispatch("keydown", { key: "End" });
+  assert.equal(app.context.document.activeElement, app.filters[2]);
+  assert.equal(app.filters[2].attributes["aria-selected"], "true");
+  app.filters[2].dispatch("keydown", { key: "Home" });
+  assert.equal(app.context.document.activeElement, app.filters[0]);
+  app.filters[0].dispatch("keydown", { key: "ArrowLeft" });
+  assert.equal(app.context.document.activeElement, app.filters[2]);
+  assert.equal(app.filters[2].attributes["tabindex"], "0");
+});
+
+test("类别地点筛选组有可访问名称，清除按钮带匹配的定位样式类", () => {
+  const html = fs.readFileSync(require("node:path").join(__dirname, "../index.html"), "utf8");
+  const css = fs.readFileSync(require("node:path").join(__dirname, "../css/style.css"), "utf8");
+  assert.match(html, /<div class="home-refinements" role="group" aria-label="按类别和地点筛选">/);
+  assert.match(html, /<button id="clear-location-filter" class="clear-location-filter"/);
+  assert.match(css, /\.clear-location-filter \{[^}]*position: absolute/);
+});
+
 test("特殊字符按普通子串处理，且不通过 HTML 拼接渲染", () => {
   const app = appWith([item({ id: "literal", location: "楼栋 [A] <北门>" })]);
   app.elements["home-location-filter"].value = "[a] <北";

@@ -25,11 +25,11 @@
       <section class="items-section" aria-labelledby="items-title">
         <div class="section-heading"><h2 id="items-title" tabindex="-1">校园信息</h2><span id="result-count" class="result-count"></span></div>
         <div class="filter-tabs" role="tablist" aria-label="信息筛选">
-          <button id="filter-lost" class="filter-tab active" type="button" role="tab" aria-selected="true" aria-controls="item-list" data-filter="lost">寻物信息</button>
-          <button id="filter-found" class="filter-tab" type="button" role="tab" aria-selected="false" aria-controls="item-list" data-filter="found">招领信息</button>
-          <button id="filter-latest" class="filter-tab" type="button" role="tab" aria-selected="false" aria-controls="item-list" data-filter="latest">按最新发布</button>
+          <button id="filter-lost" class="filter-tab active" type="button" role="tab" aria-selected="true" aria-controls="item-list" tabindex="0" data-filter="lost">寻物信息</button>
+          <button id="filter-found" class="filter-tab" type="button" role="tab" aria-selected="false" aria-controls="item-list" tabindex="-1" data-filter="found">招领信息</button>
+          <button id="filter-latest" class="filter-tab" type="button" role="tab" aria-selected="false" aria-controls="item-list" tabindex="-1" data-filter="latest">按最新发布</button>
         </div>
-        <div class="home-refinements" aria-label="按类别和地点筛选">
+        <div class="home-refinements" role="group" aria-label="按类别和地点筛选">
           <label class="home-filter-field" for="home-category-filter">
             <span>物品类别</span>
             <select id="home-category-filter" aria-controls="item-list">
@@ -42,7 +42,7 @@
             <label for="home-location-filter">地点关键词</label>
             <div class="home-location-input">
               <input id="home-location-filter" type="search" autocomplete="off" aria-controls="item-list" placeholder="如图书馆、食堂">
-              <button id="clear-location-filter" type="button" aria-label="清除地点筛选" hidden>×</button>
+              <button id="clear-location-filter" class="clear-location-filter" type="button" aria-label="清除地点筛选" hidden>×</button>
             </div>
           </div>
         </div>

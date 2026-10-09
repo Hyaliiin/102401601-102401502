@@ -264,6 +264,7 @@ function selectFilter(button) {
     const selected = tab === button;
     tab.classList.toggle("active", selected);
     tab.setAttribute("aria-selected", String(selected));
+    tab.setAttribute("tabindex", selected ? "0" : "-1");
   });
   renderItems(currentFilter);
 }
@@ -789,7 +790,18 @@ function handlePublish(event) {
   showPage("success");
 }
 
-tabs.forEach((button) => button.addEventListener("click", () => selectFilter(button)));
+tabs.forEach((button) => {
+  button.addEventListener("click", () => selectFilter(button));
+  button.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const index = Array.prototype.indexOf.call(tabs, button);
+    const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
+      : (index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+    tabs[nextIndex].focus();
+    selectFilter(tabs[nextIndex]);
+  });
+});
 categoryFilter.addEventListener("change", () => {
   updateHomeFilterControlStyles();
   renderItems(currentFilter);
